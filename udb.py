@@ -124,7 +124,7 @@ if __name__ == '__main__':
         parser.add_argument('-n', '--series-name', help='name of the series to search')
         parser.add_argument('-y', '--series-year', type=int, help='release year of the series')
         parser.add_argument('-e', '--episodes', action='append', help='episodes number to download')
-        parser.add_argument('-r', '--resolution', help='resolution to download the episodes')
+        parser.add_argument('-r', '--resolution', type=str, help='resolution to download the episodes')
         parser.add_argument('-d', '--start-download', action='store_true', help='start download immediately or not')
 
         args = parser.parse_args()
@@ -133,7 +133,7 @@ if __name__ == '__main__':
         series_name_predef = args.series_name
         series_year_predef = args.series_year
         episodes_predef = '-'.join(args.episodes) if args.episodes else None
-        resolution_predef = str(args.resolution)
+        resolution_predef = args.resolution
         # convert bool to y/n
         start_download_predef = 'y' if args.start_download else None
 
