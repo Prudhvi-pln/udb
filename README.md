@@ -69,15 +69,15 @@ To use the UDB, make sure you have the following requirements met:
 
 ## Usage
 
-The UDB is super easy to use. Follow these steps:
+UDB is super easy to use. Follow these steps:
 
 1. Launch your favorite command-line interface.
 2. Navigate to the project directory.
 3. Run the following command:
 
-```
-python udb.py
-```
+  ```
+  python udb.py
+  ```
 
 4. Sit back, relax, and let the magic happen! The downloader will guide you through the process and download your selected anime or drama series.
 
