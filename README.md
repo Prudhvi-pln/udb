@@ -4,7 +4,7 @@ Welcome to the UDB, the Ultimate-Download-Bot for Anime and Drama! 🎉
 
 ## Insipiration
 
-It is ia good weekend and you found a good anime to watch. But the effort of downloading all episodes (especially for One Piece 😅), the pain is unimaginable. So, this is created to help all such troubled souls. As Ikta Solorok once said: `Laziness is the mother of evolution`
+It is a weekend and you found a good anime to binge-watch. But the effort of downloading all episodes (especially for series like One Piece 😅), the pain is unimaginable. _Ofcourse, you have an option to watch online, but what about people with poor unstable networks, or students with limited access to wifi_. So, this is created to help all such troubled souls. As Ikta Solorok once said: `Laziness is the mother of evolution`
 
 ## Overview
 
