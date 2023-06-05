@@ -1,0 +1,35 @@
+anime:
+  base_url: 'https://animepahe.ru/'
+  search_url: 'api?m=search&q='
+  episodes_list_url: 'api?m=release&sort=episode_asc&id='
+  download_link_url: 'api?m=links&p=kwik&id='
+  episode_url: 'play/_anime_id_/_episode_id_'
+  download_dir: 'D:\Anime'
+  request_timeout: 30
+
+drama:
+  base_url: 'https://www4.myasiantv.cc/'
+  search_url: 'search.html?key='
+  search_title_element: 'ul.items li h2 a'
+  search_link_element: 'ul.items li h2 a'
+  series_info_element: 'div.left p'
+  episode_link_element: 'ul.list-episode li h2 a'
+  episode_sub_type_element: 'ul.list-episode li img'
+  episode_upload_time_element: 'ul.list-episode li span'
+  stream_links_element: 'div.anime_muti_link div'
+  m3u8_fetch_link: 'https://asianhdplay.net/encrypt-ajax.php?id='
+  request_timeout: 30
+  # preferred urls while fetching m3u8 links. uses same order of preference
+  preferred_urls: ['https://fast', 'https://hls', 'https://ttcx']
+  # avoid below urls while fetching m3u8 links
+  blacklist_urls: ['original']
+
+DownloaderConfig:
+  # creates a target folder with name of series under this. Uses this, if none specified above
+  download_dir: 'C:\Users\HP\Downloads\Video'
+  # if set to auto, creates a temp location under the target folder
+  temp_download_dir: 'auto'
+  # concurrency to load segments in a m3u8 file
+  concurrency_per_file: 'auto'
+  request_timeout: 30
+  max_parallel_downloads: 2

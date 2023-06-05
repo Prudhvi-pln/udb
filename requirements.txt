@@ -1,0 +1,7 @@
+argparse
+pyyaml
+jsbeautifier
+beautifulsoup4
+requests
+tqdm
+pycryptodome
