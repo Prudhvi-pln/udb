@@ -2,6 +2,7 @@
  - Version 2.7 [2023-06-05]
    - Added CLI support for automation. Run this command for details: `python udb.py -h`
    - Added dynamic output declaration
+   - Fixed downloading of floating episodes (ex: 6.5, 10.5)
 
  - Version 2.6 [2023-05-20]
    - Added Linux OS compatibility

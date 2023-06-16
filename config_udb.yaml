@@ -8,7 +8,7 @@ anime:
   request_timeout: 30
 
 drama:
-  base_url: https://www4.myasiantv.cc/
+  base_url: https://myasiantv.cx/
   search_url: search.html?key=
   search_title_element: ul.items li h2 a
   search_link_element: ul.items li h2 a

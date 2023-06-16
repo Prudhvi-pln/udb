@@ -190,9 +190,9 @@ if __name__ == '__main__':
             ep_range = f"{episodes[0]['episode']}-{episodes[-1]['episode']}"
 
         try:
-            ep_start, ep_end = map(int, ep_range.split('-'))
+            ep_start, ep_end = map(float, ep_range.split('-'))
         except ValueError as ve:
-            ep_start = ep_end = int(ep_range)
+            ep_start = ep_end = float(ep_range)
 
         # filter required episode links and print
         print("\nFetching Episodes & Available Resolutions:")

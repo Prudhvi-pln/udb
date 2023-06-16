@@ -114,7 +114,7 @@ class AnimeClient(BaseClient):
         '''
         download_links = {}
         for episode in episodes:
-            if int(episode.get('episode')) >= ep_start and int(episode.get('episode')) <= ep_end:
+            if float(episode.get('episode')) >= ep_start and float(episode.get('episode')) <= ep_end:
                 episode_link = self.episode_url.replace('_anime_id_', self.anime_id).replace('_episode_id_', episode.get('session'))
                 response = self._get_kwik_links_v2(episode_link)
                 if response is not None:

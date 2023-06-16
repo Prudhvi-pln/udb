@@ -218,7 +218,7 @@ class DramaClient(BaseClient):
         '''
         download_links = {}
         for episode in episodes:
-            if int(episode.get('episode')) >= ep_start and int(episode.get('episode')) <= ep_end:
+            if float(episode.get('episode')) >= ep_start and float(episode.get('episode')) <= ep_end:
                 link = self._get_stream_link(episode.get('episodeLink'))
                 if link is not None:
                     # add episode details & stream link to udb dict

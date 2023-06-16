@@ -134,7 +134,7 @@ class HLSDownloader():
             try:
                 ep_no = f'Epsiode-{int(ep_no):02d}'
             except ValueError as ve:
-                ep_no = f'Epsiode-{ep_no}'
+                ep_no = f'Movie' if ep_no.lower() == 'movie' else f'Epsiode-{ep_no}'
         except:
             ep_no = f'Movie'
         # show progress of download
