@@ -6,7 +6,7 @@ from time import sleep
 
 
 # custom decorator for retring of a function
-def retry(exceptions=(Exception,), tries=3, delay=2, backoff=2):
+def retry(exceptions=(Exception,), tries=3, delay=2, backoff=2, print_errors=False):
     """
     Retry Decorator
     Retries the wrapped function/method `times` times if the exceptions listed
@@ -29,7 +29,7 @@ def retry(exceptions=(Exception,), tries=3, delay=2, backoff=2):
                     sleep(mdelay)
                     attempt += 1
                     mdelay *= backoff
-                    if attempt >= tries:
+                    if attempt >= tries and print_errors:
                         print(f'{e} | Final Attempt: {attempt} / {tries}')
             return func(*args, **kwargs)
         return wrapper
