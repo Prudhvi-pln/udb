@@ -46,7 +46,7 @@ class DramaClient(BaseClient):
         '''
         soup = self._get_bsoup(link)
         for stream in soup.select(self.stream_links_element):
-            if 'asianhdplay' in stream['data-video']:
+            if 'streaming.php' in stream['data-video']:
                 stream_link = stream['data-video']
                 if stream_link.startswith('/'):
                     stream_link = 'https:' + stream_link
