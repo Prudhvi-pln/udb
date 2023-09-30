@@ -17,7 +17,7 @@ drama:
   episode_sub_type_element: ul.list-episode li img
   episode_upload_time_element: ul.list-episode li span
   stream_links_element: div.anime_muti_link div
-  m3u8_fetch_link: https://asianhdplay.net/encrypt-ajax.php?id=
+  m3u8_fetch_link: https://asianhd1.com/encrypt-ajax.php?id=
   request_timeout: 30
   preferred_urls:                             # preferred urls while fetching m3u8 links. uses same order of preference
   - https://fast
