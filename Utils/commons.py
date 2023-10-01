@@ -1,9 +1,11 @@
 __author__ = 'Prudhvi PLN'
 
+import logging, os, sys
+import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from time import sleep
-
+from logging.handlers import RotatingFileHandler
 
 # custom decorator for retring of a function
 def retry(exceptions=(Exception,), tries=3, delay=2, backoff=2, print_errors=False):
@@ -69,3 +71,72 @@ def threaded(max_parallel=None, thread_name_prefix='udb-', print_status=False):
             return final_status
         return wrapper
     return decorator
+
+# load yaml config into dict
+def load_yaml(config_file):
+    if not os.path.isfile(config_file):
+        print(f'Config file [{config_file}] not found')
+        exit(1)
+
+    with open(config_file, "r") as stream:
+        try:
+            return yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(f"Error occured while reading yaml file: {exc}")
+            exit(1)
+
+# custom logger function
+def create_logger(**logger_config):
+    '''Create a logging handler
+
+    Args: logging configuration as a dictionary [Allowed keys: log_level, log_dir, log_filename, max_log_size_in_kb, log_backup_count]
+    Returns: a logging handler'''
+    # human-readable log-level to logging.* mapping
+    log_levels = {
+        'DEBUG': logging.DEBUG,
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR
+    }
+
+    # set default logging configuration
+    default_logging_config = {
+        'log_level': 'INFO',
+        'log_dir': 'log',
+        'log_filename': 'udb.log',
+        'max_log_size_in_kb': 1000,
+        'log_backup_count': 3
+    }
+
+    # update missing logging configuration with defaults
+    for key in default_logging_config.keys():
+        if key not in logger_config:
+            logger_config[key] = default_logging_config[key]
+
+    # format the log entries
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(funcName)s:%(lineno)s - %(message)s')
+    # get root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    # create logging directory
+    if logger_config['log_dir']: os.makedirs(logger_config['log_dir'], exist_ok=True)
+
+    # create logging handler for stdout
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.ERROR)
+
+    # add rotating file handler to rotate log file when size crosses a threshold
+    file_handler = RotatingFileHandler(
+        os.path.join(logger_config['log_dir'], logger_config['log_filename']),
+        maxBytes = logger_config['max_log_size_in_kb'] * 1000,  # KB to Bytes
+        backupCount = logger_config['log_backup_count'],
+        encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(log_levels.get(logger_config['log_level'].upper()))
+
+    logger.addHandler(file_handler)     # print to file
+    logger.addHandler(stdout_handler)   # print only error to stdout
+
+    return logger

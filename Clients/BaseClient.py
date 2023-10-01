@@ -1,6 +1,7 @@
 __author__ = 'Prudhvi PLN'
 
 import json
+import logging
 import requests
 from bs4 import BeautifulSoup as BS
 from requests.adapters import HTTPAdapter
@@ -36,24 +37,28 @@ class BaseClient():
         # list of invalid characters not allowed in windows file system
         self.invalid_chars = ['/', '\\', '"', ':', '?', '|', '<', '>', '*']
         self.bs = AES.block_size
+        # get the root logger
+        self.logger = logging.getLogger()
 
     def _update_udb_dict(self, parent_key, child_dict):
         if parent_key in self.udb_episode_dict:
             self.udb_episode_dict[parent_key].update(child_dict)
         else:
             self.udb_episode_dict[parent_key] = child_dict
+        self.logger.debug(f'Updated udb dict: {self.udb_episode_dict}')
 
     def _get_udb_dict(self):
         return self.udb_episode_dict
 
     @retry()
-    def _send_request(self, url, referer=None, decode_json=True):
+    def _send_request(self, url, referer=None, decode_json=True, extra_headers=None):
         '''
         call response session and return response
         '''
         # print(f'{self.req_session}: {url}')
         header = self.header
         if referer: header.update({'referer': referer})
+        if extra_headers: header.update(extra_headers)
         response = self.req_session.get(url, headers=header, verify=False)
         # print(response)
         if response.status_code == 200:
@@ -63,13 +68,13 @@ class BaseClient():
             if data['total'] > 0:
                 return data['data']
         else:
-            print(f'Failed with response code: {response.status_code}')
+            self.logger.error(f'Failed with response code: {response.status_code}')
 
-    def _get_bsoup(self, search_url, referer=None):
+    def _get_bsoup(self, search_url, referer=None, extra_headers=None):
         '''
         return html parsed soup
         '''
-        html_content = self._send_request(search_url, referer, False)
+        html_content = self._send_request(search_url, referer, False, extra_headers)
 
         return BS(html_content, 'html.parser')
 

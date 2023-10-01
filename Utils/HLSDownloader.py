@@ -1,5 +1,6 @@
 __author__ = 'Prudhvi PLN'
 
+import logging
 import os
 import re
 import requests
@@ -15,13 +16,14 @@ from urllib3.util.retry import Retry
 
 from Utils.commons import retry
 
-debug = False
 
 class HLSDownloader():
     # References: https://github.com/Oshan96/monkey-dl/blob/master/anime_downloader/util/hls_downloader.py
     # https://github.com/josephcappadona/m3u8downloader/blob/master/m3u8downloader/m3u8.py
 
     def __init__(self, dl_config, referer_link, out_file, session=None):
+        # logger init
+        self.logger = logging.getLogger()
         self.out_dir = dl_config['download_dir']
         self.parent_temp_dir = dl_config['temp_download_dir'] if dl_config['temp_download_dir'] != 'auto' else os.path.join(f'{self.out_dir}', 'temp_dir')
         self.temp_dir = os.path.join(f"{self.parent_temp_dir}", f"{out_file.replace('.mp4','')}") #create temp directory per episode
@@ -157,7 +159,7 @@ class HLSDownloader():
                     seg_status = f'R/F: {reused_segments}/{failed_segments}'
                     progress.set_postfix_str(seg_status, refresh=True)
 
-        if debug: print(f'[{ep_no}] Segments download status: Total: {len(ts_urls)} | Reused: {reused_segments} | Failed: {failed_segments}')
+        self.logger.info(f'[{ep_no}] Segments download status: Total: {len(ts_urls)} | Reused: {reused_segments} | Failed: {failed_segments}')
         if failed_segments > 0:
             raise Exception(f'Failed to download {failed_segments} / {len(ts_urls)} segments')
 
@@ -180,13 +182,17 @@ class HLSDownloader():
 
     def m3u8_downloader(self, m3u8_link):
         # create output directory
+        self.logger.debug('Creating output directories')
         self._create_out_dirs()
 
         iv = None
+        self.logger.debug('Fetching stream data')
         m3u8_data = self._get_stream_data(m3u8_link, True)
 
+        self.logger.debug('Check if stream is encrypted')
         is_encrypted = self._is_encrypted(m3u8_data)
         if is_encrypted:
+            self.logger.debug('Stream is encrypted. Collect iv data and download key')
             key_uri, iv = self._collect_uri_iv(m3u8_data)
             self._download_segment(key_uri)
 
@@ -194,12 +200,20 @@ class HLSDownloader():
         if iv:
             raise Exception("Current code cannot decode IV links")
 
+        self.logger.debug('Collect .ts segment urls')
         ts_urls = self._collect_ts_urls(m3u8_link, m3u8_data)
+
+        self.logger.debug('Download collected .ts segments')
         self._download_segments(ts_urls)
+
+        self.logger.debug('Rewrite m3u8 file with downloaded .ts segments paths')
         self._rewrite_m3u8_file(m3u8_data)
+
+        self.logger.debug('Convert .ts files to .mp4')
         self._convert_to_mp4()
 
         # remove temp dir once completed and dir is empty
+        self.logger.debug('Removing temporary directories')
         self._remove_out_dirs()
 
         return (0, None)
@@ -221,7 +235,10 @@ def downloader(ep_details, dl_config):
     get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
     start = get_current_time()
     start_epoch = int(time())
-    if debug: print(f'[{start}] Download started for {out_file}...')
+
+    # create logger
+    logger = logging.getLogger()
+    logger.info(f'Download started for {out_file}...')
 
     if os.path.isfile(os.path.join(f'{out_dir}', f'{out_file}')):
         # skip file if already exists

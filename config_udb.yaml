@@ -8,8 +8,9 @@ anime:
   request_timeout: 30
 
 drama:
-  base_url: https://myasiantv.cx/
+  base_url: https://myasiantv.ac/
   search_url: search.html?key=
+  episodes_list_url: ajax/episode-list/_series_name_/_pg_no_.html?page=_pg_no_
   search_title_element: ul.items li h2 a
   search_link_element: ul.items li h2 a
   series_info_element: div.left p
@@ -17,7 +18,7 @@ drama:
   episode_sub_type_element: ul.list-episode li img
   episode_upload_time_element: ul.list-episode li span
   stream_links_element: div.anime_muti_link div
-  m3u8_fetch_link: https://asianhdplay.net/encrypt-ajax.php?id=
+  m3u8_fetch_link: encrypt-ajax.php?id=
   request_timeout: 30
   preferred_urls:                             # preferred urls while fetching m3u8 links. uses same order of preference
   - https://fast
@@ -32,3 +33,10 @@ DownloaderConfig:
   concurrency_per_file: auto                  # concurrency to load segments in a m3u8 file
   request_timeout: 30
   max_parallel_downloads: 2
+
+LoggerConfig:
+  log_level: INFO
+  log_dir: log
+  log_file_name: udb.log
+  max_log_size_in_kb: 100
+  log_backup_count: 3
