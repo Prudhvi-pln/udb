@@ -91,7 +91,7 @@ def get_resolutions(items):
     genarator function to yield the resolutions of available episodes
     '''
     for item in items:
-        yield [ next(iter(i)) for i in item ]
+        yield list(item.keys())
 
 def batch_downloader(download_fn, links, dl_config, max_parallel_downloads):
 
@@ -190,20 +190,22 @@ if __name__ == '__main__':
 
         # fetch episode links
         logger.info(f'Fetching episodes list')
-        print('\nAvailable Episodes Details:')
+        print(f'\nAvailable Episodes Details:', end=' ')
         episodes = client.fetch_episodes_list(target_series)
+        print(f'{len(episodes)} episodes found.')
 
         logger.info(f'Displaying episodes list')
-        client.show_episode_results(episodes)
+        client.show_episode_results(episodes, episodes_predef)
 
         # get user inputs
         if episodes_predef:
             print(f'\nUsing Predefined Input for episodes to download: {episodes_predef}')
             ep_range = episodes_predef
         else:
-            ep_range = input("\nEnter episodes to download (ex: 1-16) [default=ALL]: ") or "all"
-        if str(ep_range).lower() == 'all':
-            ep_range = f"{episodes[0]['episode']}-{episodes[-1]['episode']}"
+            default_ep_range = f"{episodes[0]['episode']}-{episodes[-1]['episode']}"
+            ep_range = input(f"\nEnter episodes to download (ex: 1-16) [default={default_ep_range}]: ") or "all"
+            if str(ep_range).lower() == 'all':
+                ep_range = default_ep_range
 
         logger.debug(f'Selected episode range: {ep_range = }')
 
@@ -238,7 +240,7 @@ if __name__ == '__main__':
         for _valid_res in valid_resolutions_gen:
             valid_resolutions = _valid_res
             if len(valid_resolutions) > 0:
-                break
+                break   # get the resolutions from the first non-empty episode
         else:
             # set to default if empty
             valid_resolutions = ['360','480','720','1080']
@@ -246,19 +248,13 @@ if __name__ == '__main__':
         logger.debug(f'{valid_resolutions = }')
 
         # get valid resolution from user
-        while True:
-            if resolution_predef:
-                print(f'\nUsing Predefined Input for resolution: {resolution_predef}')
-                resolution = resolution_predef
-            else:
-                resolution = input(f"\nEnter download resolution ({'|'.join(valid_resolutions)}) [default=720]: ") or "720"
+        if resolution_predef:
+            print(f'\nUsing Predefined Input for resolution: {resolution_predef}')
+            resolution = resolution_predef
+        else:
+            resolution = input(f"\nEnter download resolution ({'|'.join(valid_resolutions)}) [default=720]: ") or "720"
 
-            logger.info(f'Selected download resolution: {resolution}')
-            if resolution not in valid_resolutions:
-                logger.error(f'Invalid Resolution [{resolution}] entered! Please give a valid resolution!')
-                resolution_predef = None    #reset predefined input if specified is not found
-            else:
-                break
+        logger.info(f'Selected download resolution: {resolution}')
 
         # get m3u8 link for the specified resolution
         logger.info('Fetching m3u8 links for selected episodes')

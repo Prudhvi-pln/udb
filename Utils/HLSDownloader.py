@@ -98,14 +98,19 @@ class HLSDownloader():
         return uri, iv
 
     def _collect_ts_urls(self, m3u8_link, m3u8_data):
+        # Case-1: typical HLS with AES-128
         urls = [url.group(0) for url in re.finditer("https://(.*)\.ts(.*)", m3u8_data)]
         if len(urls) == 0:
-            # Relative paths
+            # Case-2: case-1 with relative paths
             base_url = '/'.join(m3u8_link.split('/')[:-1])
             urls = [base_url + "/" + url.group(0) for url in re.finditer("(.*)\.ts(.*)", m3u8_data)]
             if len(urls) == 0:
-                # get all components not only .ts
+                # Case-3: sometimes HLS contain .css, .jpg and others. So, get all components not only .ts
                 urls = [base_url + "/" + url.group(0) for url in re.finditer('ep\.(.*)', m3u8_data)]
+
+        if len(urls) == 0:
+            # Case-4: HLS for AV1 codec
+            urls = [ url.group(0).replace('"', '') for url in re.finditer("https://(.*)", m3u8_data) ]
 
         return urls
 

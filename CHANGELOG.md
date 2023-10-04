@@ -1,9 +1,11 @@
 ## Changelog
- - Version 2.8 [2023-10-01]
+ - Version 2.8 [2023-10-04]
    - Added detailed loggers to make it developer friendly :)
    - Updated drama links
    - Get stream links dynamically
    - Updated _fetch_episodes_list_ in Drama to load episodes > 50
+   - Added option to auto select from available resolutions
+   - Performance optimizations under the hood
 
  - Version 2.7 [2023-06-05]
    - Added CLI support for automation. Run this command for details: `python udb.py -h`

@@ -141,3 +141,77 @@ class BaseClient():
         decrypted_msg = decrypted_msg.decode('utf-8').strip()
 
         return decrypted_msg
+
+    def _get_episode_range_to_show(self, start, end, predefined_range=None, threshold=24):
+        '''
+        Get the range of episodes from user and return the range to display
+        '''
+        if end - start <= threshold:        # if episode range is within threshold, display all
+            return start, end
+
+        default_range = f'{start}-{end}'
+        if predefined_range:
+            # display only required episodes if specified from cli
+            show_range = predefined_range
+        else:
+            show_range = input(f'Enter range to display (ex: 1-16) [default={default_range}]: ') or 'all'
+            if show_range.lower() == 'all':
+                show_range = default_range
+
+        try:
+            start, end = map(int, map(float, show_range.split('-')))
+        except ValueError as ve:
+            start = end = int(float(show_range))
+        except Exception as e:
+            pass    # show all episodes
+
+        if show_range == default_range:
+            print('Showing all episodes:')
+        else:
+            print(f'Showing episodes from {start} to {end}:')
+
+        return start, end
+
+    def _resolution_selector(self, available_resolutions, target_resolution, selector_strategy='lowest'):
+        '''
+        Select a resolution based on selection strategy
+        '''
+        if target_resolution in available_resolutions:
+            return target_resolution
+
+        sorted_resolutions = sorted(available_resolutions, key=lambda x: int(x))
+
+        if selector_strategy == 'highest':
+            # if selector_strategy is higher, select the next highest resolution
+            for resolution in sorted_resolutions:
+                if int(resolution) > int(target_resolution):
+                    return resolution
+            else:
+                return resolution      # return highest resolution if reached end of loop
+
+        elif selector_strategy == 'lowest':
+            # if selector_strategy is lower, select the next lowest resolution
+            for resolution in sorted_resolutions[::-1]:
+                if int(resolution) < int(target_resolution):
+                    return resolution
+            else:
+                return resolution      # return lowest resolution if reached start of loop
+
+        else:
+            return None
+
+    def show_search_results(self, items):
+        '''
+        print all search results at once if required
+        '''
+        for idx, item in items.items():
+            # below _show_search_results should be implemented in respective Client class
+            self._show_search_results(idx, item)
+
+    def show_episode_links(self, items):
+        '''
+        print all episodes details at once if required
+        '''
+        for item, details in items.items():
+            # below _show_episode_links should be implemented in respective Client class
+            self._show_episode_links(item, details)

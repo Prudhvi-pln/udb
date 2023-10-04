@@ -17,6 +17,7 @@ class AnimeClient(BaseClient):
         self.download_link_url = self.base_url + config['download_link_url']
         self.episode_url = self.base_url + config['episode_url']
         self.anime_id = ''      # anime id. required to create referer link
+        self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         self.logger.debug(f'Anime client initialized with {config = }')
 
     def _show_search_results(self, key, details):
@@ -33,20 +34,19 @@ class AnimeClient(BaseClient):
         pretty print episode links from fetch_episode_links
         '''
         info = f"Episode: {self._safe_type_cast(key)}"
-        for _res in details:
-            _reskey = next(iter(_res))
-            filesize = _res[_reskey]['filesize']
+        for _res, _vals in details.items():
+            filesize = _vals['filesize']
             try:
                 filesize = filesize / (1024**2)
-                info += f' | {_reskey}P ({filesize:.2f} MB) [{_res[_reskey]["audio"]}]'
+                info += f' | {_res}P ({filesize:.2f} MB) [{_vals["audio"]}]'
             except:
-                info += f' | {filesize} [{_res[_reskey]["audio"]}]'
+                info += f' | {filesize} [{_vals["audio"]}]'
 
         print(info)
 
     def _get_kwik_links(self, ep_id):
         '''
-        return json data containing kwik links for a episode
+        [DEPRECATED] return json data containing kwik links for a episode
         '''
         response = self._send_request(self.download_link_url + ep_id, None, False)
         self.logger.debug(f'Response: {response}')
@@ -55,7 +55,11 @@ class AnimeClient(BaseClient):
 
     def _get_kwik_links_v2(self, ep_link):
         '''
-        return json data containing kwik links for a episode. Scrapes html instead of api call as per site structure as on Feb 15, 2023
+        Scrapes html instead of api call as per site structure as on Feb 15, 2023.
+        Return resolutions data containing kwik links for a episode and filtered on:
+        - Audio: filter out english dubs
+        - Codec: use AV1 codec if available, else use default. AV1 offers better compression
+        - Sort the resolutions in ascending order (already sorted by default)
         '''
         self.logger.debug(f'Fetching soup to extract kwik links for {ep_link = }')
         response = self._get_bsoup(ep_link)
@@ -66,18 +70,28 @@ class AnimeClient(BaseClient):
         sizes = response.select('div#pickDownload a')
         self.logger.debug(f'Extracted {sizes = }')
 
-        results = []
+        resolutions = {}
         for l,s in zip(links, sizes):
-            res_dict = {}
-            res = l['data-resolution']
-            res_dict[res] = {
+            resltn = l['data-resolution']
+            current_audio = l['data-audio']
+            current_codec = l['data-av1']
+            # add new resolution & update a resolution only if current_codec is 1 (AV1). Preference: 1 > 0 > others
+            if resltn in resolutions and current_codec != '1':
+                continue
+            # skip english dubs
+            if current_audio == 'eng':
+                continue
+            resolutions[resltn] = {
                 'kwik': l['data-src'],
-                'audio': l['data-audio'],
+                'audio': current_audio,
+                'codec': current_codec,
                 'filesize': s.text.strip()
             }
-            results.append(res_dict)
 
-        return results
+        # if resolutions:   # sort the resolutions in ascending order
+        #     resolutions = dict(sorted(resolutions.items(), key=lambda x: int(x[0])))
+
+        return resolutions
 
     def search(self, keyword):
         '''
@@ -136,17 +150,14 @@ class AnimeClient(BaseClient):
                 episode_link = self.episode_url.replace('_anime_id_', self.anime_id).replace('_episode_id_', episode.get('session'))
 
                 self.logger.debug(f'Fetching kwik link for {episode_link = }')
-                response = self._get_kwik_links_v2(episode_link)
-                self.logger.debug(f'Extracted kwik links: {response = }')
+                links = self._get_kwik_links_v2(episode_link)
+                self.logger.debug(f'Extracted & filtered (no eng dub & prefer AV1) kwik links: {links = }')
 
-                if response is not None:
+                if links is not None:
                     # add episode uid & link to udb dict
                     self._update_udb_dict(episode.get('episode'), {'episodeId': episode.get('session'), 'episodeLink': episode_link})
-                    # filter out eng dub links
-                    links = [ _res for _res in response for k in _res.values() if k.get('audio') != 'eng' ]
-                    self.logger.debug(f'Filtered based on audio (non-english): {links = }')
-
-                    download_links[episode.get('episode')] = links
+                    if len(links) > 0:
+                        download_links[episode.get('episode')] = links
                     self._show_episode_links(episode.get('episode'), links)
 
         return download_links
@@ -200,22 +211,27 @@ class AnimeClient(BaseClient):
         '''
         return dict containing m3u8 links based on resolution
         '''
-        has_key = lambda x, y: y in x.keys()
-
         for ep, link in target_links.items():
             self.logger.debug(f'Epsiode: {ep}, Link: {link}')
-            print(f'Episode: {self._safe_type_cast(ep)}', end=' | ')
-            res_dict = [ i.get(resolution) for i in link if has_key(i, resolution) ]
-            if len(res_dict) == 0:
-                self.logger.error(f'Resolution [{resolution}] not found')
+            info = f'Episode: {self._safe_type_cast(ep)} |'
+
+            # select the resolution based on the selection strategy
+            selected_resolution = self._resolution_selector(link.keys(), resolution, self.selector_strategy)
+            res_dict = link.get(selected_resolution)
+            self.logger.debug(f'{selected_resolution = } based on {self.selector_strategy = }, Data: {res_dict = }')
+
+            if res_dict is None or len(res_dict) == 0:
+                self.logger.error(f'{info} Resolution [{resolution}] not found')
+
             else:
+                info = f'{info} {selected_resolution}P |'
                 try:
                     if episode_prefix.endswith('movie') and len(target_links.items()) <= 1:
-                        ep_name = f'{episode_prefix} - {resolution}P.mp4'
+                        ep_name = f'{episode_prefix} - {selected_resolution}P.mp4'
                     else:
-                        ep_name = f'{episode_prefix} {ep} - {resolution}P.mp4'
+                        ep_name = f'{episode_prefix} {ep} - {selected_resolution}P.mp4'
                     ep_name = self._windows_safe_string(ep_name)
-                    kwik_link = res_dict[0]['kwik']
+                    kwik_link = res_dict['kwik']
 
                     self.logger.debug(f'Fetching m3u8 content from {kwik_link = }')
                     raw_content = self.get_m3u8_content(kwik_link, ep)
@@ -226,36 +242,22 @@ class AnimeClient(BaseClient):
 
                     # add m3u8 & kwik links against episode
                     self._update_udb_dict(ep, {'episodeName': ep_name, 'refererLink': kwik_link, 'm3u8Link': ep_link})
-                    print(f'Link found [{ep_link}]')
+                    self.logger.debug(f'{info} Link found [{ep_link}]')
+                    print(f'{info} Link found [{ep_link}]')
 
                 except Exception as e:
-                    self.logger.error(f'Failed to fetch link with error [{e}]')
+                    self.logger.error(f'{info} Failed to fetch link with error [{e}]')
 
         final_dict = { k:v for k,v in self._get_udb_dict().items() if v.get('m3u8Link') is not None }
 
         return final_dict
 
-    def show_search_results(self, items):
-        '''
-        print all anime results based on your search at once if required
-        '''
-        for idx, item in items.items():
-            self._show_search_results(idx, item)
-
-    def show_episode_results(self, items):
+    def show_episode_results(self, items, predefined_range):
         '''
         pretty print episodes list from fetch_episodes_list
         '''
-        cnt = show = len(items)
-        if cnt > 30:
-            show = int(input(f'Total {cnt} episodes found. Enter range to display [default=ALL]: ') or cnt)
-            print(f'Showing top {show} episodes:')
-        for item in items[:show]:
-            print(f"Episode: {self._safe_type_cast(item.get('episode'))} | Audio: {item.get('audio')} | Duration: {item.get('duration')} | Release date: {item.get('created_at')}")
+        start, end = self._get_episode_range_to_show(items[0].get('episode'), items[-1].get('episode'), predefined_range, threshold=30)
 
-    def show_episode_links(self, items):
-        '''
-        print all episodes details at once if required
-        '''
-        for item, details in items.items():
-            self._show_episode_links(item, details)
+        for item in items:
+            if item.get('episode') >= start and item.get('episode') <= end:
+                print(f"Episode: {self._safe_type_cast(item.get('episode'))} | Audio: {item.get('audio')} | Duration: {item.get('duration')} | Release date: {item.get('created_at')}")

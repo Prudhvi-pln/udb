@@ -23,6 +23,7 @@ class DramaClient(BaseClient):
         self.m3u8_fetch_link = config['m3u8_fetch_link']
         self.preferred_urls = config['preferred_urls']
         self.blacklist_urls = config['blacklist_urls']
+        self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         # key & iv for decryption & encrytion. Don't know why it is working only for these
         # Reference: https://github.com/CoolnsX/dra-cla/blob/main/dra-cla
         self.key = '3933343232313932343333393532343839373532333432393038353835373532'
@@ -71,13 +72,14 @@ class DramaClient(BaseClient):
         pretty print episode links from fetch_episode_links
         '''
         info = f"Episode: {self._safe_type_cast(key)}"
-        for _res in details:
-            if 'errorMsg' in _res:
-                info += f' | {_res["errorMsg"]}'
-                self.logger.warning(info)
-            else:
-                _reskey = next(iter(_res))
-                info += f' | {_reskey}P ({_res[_reskey]["resolution_size"]})' #| URL: {_res[_reskey]["m3u8Link"]}
+        if 'errorMsg' in details:
+            info += f' | {details["errorMsg"]}'
+            self.logger.error(info)
+            return
+
+        for _res, _vals in details.items():
+            info += f' | {_res}P ({_vals["resolution_size"]})' #| URL: {_vals["m3u8Link"]}
+
         print(info)
 
     def _get_episodes_list(self, soup, ajax=False):
@@ -115,7 +117,7 @@ class DramaClient(BaseClient):
         '''
         parse master m3u8 data and return dict of resolutions and m3u8 links
         '''
-        m3u8_links = []
+        m3u8_links = {}
         base_url = '/'.join(master_m3u8_link.split('/')[:-1])
         self.logger.debug(f'Extracting m3u8 data from master link: {master_m3u8_link}')
         master_m3u8_data = self._send_request(master_m3u8_link, referer, False)
@@ -128,30 +130,29 @@ class DramaClient(BaseClient):
 
         # if master m3u8 does not contain any resolutions, use default
         if len(resolution_links) == 0:
-            m3u8_links.append({'original': {'resolution_size': 'original', 'm3u8Link': master_m3u8_link}})
+            m3u8_links = {'original': {'resolution_size': 'original', 'm3u8Link': master_m3u8_link}}
             return m3u8_links
 
         for _res, _pixels, _link in zip(resolution_names, resolutions, resolution_links):
             # prepend base url if it is relative url
             m3u8_link = _link if _link.startswith('http') else base_url + '/' + _link
-            m3u8_links.append({
-                _res.replace('p',''): {
-                    'resolution_size': _pixels,
-                    'm3u8Link': m3u8_link
-                }
-            })
+            m3u8_links[_res.replace('p','')] = {
+                'resolution_size': _pixels,
+                'm3u8Link': m3u8_link
+            }
 
         return m3u8_links
 
     def _get_m3u8_links(self, link):
         '''
         retrieve m3u8 links from stream link and return available resolution links
+        - Sort the resolutions in ascending order (already sorted by default)
         '''
         # extract url params & get id value
         uid = { i.split('=')[0]:i.split('=')[1] for i in link.split('?')[1].split('&') }.get('id')
         self.logger.debug(f'Extracted {uid = }')
         if uid is None or uid == '':
-            return [{'errorMsg': 'id not found in Stream link'}]
+            return {'errorMsg': 'ID not found in stream link'}
 
         # encrypt the uid with new cipher
         self.logger.debug(f'Creating encrypted link')
@@ -177,7 +178,7 @@ class DramaClient(BaseClient):
             master_m3u8_links = json.loads(decoded_m3u8_response)
 
         except Exception as e:
-            return [{'errorMsg': f'Invalid response received. Error: {e}'}]
+            return {'errorMsg': f'Invalid response received. Error: {e}'}
 
         # get m3u8 links containing resolutions [ source, bkp_source ]
         master_m3u8_links = [ master_m3u8_links.get('source')[0]['file'], master_m3u8_links.get('source_bk')[0]['file'] ]
@@ -191,8 +192,10 @@ class DramaClient(BaseClient):
         ordered_master_m3u8_links = [ j for j in ordered_master_m3u8_links if not any(i in j for i in self.blacklist_urls) ]
         self.logger.debug(f'{ordered_master_m3u8_links = }')
 
-        m3u8_links = []
+        counter = 0
+        m3u8_links = {}
         for master_m3u8_link in ordered_master_m3u8_links:
+            counter += 1
             try:
                 self.logger.debug(f'Getting m3u8 from: {master_m3u8_link = }')
                 m3u8_links = self._parse_m3u8_links(master_m3u8_link, link)
@@ -201,8 +204,13 @@ class DramaClient(BaseClient):
                     self.logger.debug('m3u8 links obtained. No need to try with alternative. Breaking loop')
                     break
             except Exception as e:
+                # try with alternative master m3u8 link
                 self.logger.warning(f'Failed to fetch m3u8 links from {master_m3u8_link = }. Trying with alternative...')
-                pass    # pass to alternate source
+                if counter >= len(ordered_master_m3u8_links):
+                    self.logger.warning('No other alternatives found')
+
+        # if m3u8_links:      # sort the resolutions in ascending order
+        #     m3u8_links = dict(sorted(m3u8_links.items(), key=lambda x: int(x[0])))
 
         return m3u8_links
 
@@ -234,13 +242,6 @@ class DramaClient(BaseClient):
 
         return search_results
 
-    def show_search_results(self, items):
-        '''
-        print all drama results based on your search at once if required
-        '''
-        for idx, item in items.items():
-            self._show_search_results(idx, item)
-
     def fetch_episodes_list(self, target):
         '''
         fetch episode links as dict containing link, name, upload time
@@ -267,17 +268,16 @@ class DramaClient(BaseClient):
 
         return all_episode_list[::-1]   # return episodes in ascending
 
-    def show_episode_results(self, items):
+    def show_episode_results(self, items, predefined_range):
         '''
         pretty print episodes list from fetch_episodes_list
         '''
-        cnt = show = len(items)
-        if cnt > 24:
-            show = int(input(f'Total {cnt} episodes found. Enter range to display [default=ALL]: ') or cnt)
-            print(f'Showing top {show} episodes:')
-        for item in items[:show]:
-            fmted_name = re.sub(' (\d$)', r' 0\1', item.get('episodeName'))
-            print(f"Episode: {fmted_name} | Subs: {item.get('episodeSubs')} | Release date: {item.get('episodeUploadTime')}")
+        start, end = self._get_episode_range_to_show(items[0].get('episode'), items[-1].get('episode'), predefined_range, threshold=24)
+
+        for item in items:
+            if item.get('episode') >= start and item.get('episode') <= end:
+                fmted_name = re.sub(' (\d$)', r' 0\1', item.get('episodeName'))
+                print(f"Episode: {fmted_name} | Subs: {item.get('episodeSubs')} | Release date: {item.get('episodeUploadTime')}")
 
     def fetch_episode_links(self, episodes, ep_start, ep_end):
         '''
@@ -303,17 +303,11 @@ class DramaClient(BaseClient):
                     m3u8_links = self._get_m3u8_links(link)
                     self.logger.debug(f'Extracted {m3u8_links = }')
 
-                    download_links[episode.get('episode')] = m3u8_links
+                    if 'errorMsg' not in m3u8_links and len(m3u8_links) > 0:
+                        download_links[episode.get('episode')] = m3u8_links
                     self._show_episode_links(episode.get('episode'), m3u8_links)
 
         return download_links
-
-    def show_episode_links(self, items):
-        '''
-        print all episodes details at once if required
-        '''
-        for item, details in items.items():
-            self._show_episode_links(item, details)
 
     def set_out_names(self, target_series):
         drama_title = self._windows_safe_string(target_series['title'])
@@ -326,22 +320,28 @@ class DramaClient(BaseClient):
         '''
         return dict containing m3u8 links based on resolution
         '''
-        has_key = lambda x, y: y in x.keys()
-
         for ep, link in target_links.items():
             self.logger.debug(f'Epsiode: {ep}, Link: {link}')
             info = f'Episode: {self._safe_type_cast(ep)} |'
-            res_dict = [ i.get(resolution) for i in link if has_key(i, resolution) ]
-            if len(res_dict) == 0:
+
+            # select the resolution based on the selection strategy
+            selected_resolution = self._resolution_selector(link.keys(), resolution, self.selector_strategy)
+            res_dict = link.get(selected_resolution)
+            self.logger.debug(f'{selected_resolution = } based on {self.selector_strategy = }, Data: {res_dict = }')
+
+            if res_dict is None or len(res_dict) == 0:
                 self.logger.error(f'{info} Resolution [{resolution}] not found')
+
             else:
+                info = f'{info} {selected_resolution}P |'
                 try:
-                    ep_name = f'{self.udb_episode_dict.get(ep).get("episodeName")} - {resolution}P.mp4'
-                    ep_link = res_dict[0]['m3u8Link']
+                    ep_name = f'{self.udb_episode_dict.get(ep).get("episodeName")} - {selected_resolution}P.mp4'
+                    ep_link = res_dict['m3u8Link']
                     # add m3u8 against episode
                     self._update_udb_dict(ep, {'episodeName': ep_name, 'm3u8Link': ep_link})
                     self.logger.debug(f'{info} Link found [{ep_link}]')
                     print(f'{info} Link found [{ep_link}]')
+
                 except Exception as e:
                     self.logger.error(f'{info} Failed to fetch link with error [{e}]')
 
