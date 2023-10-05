@@ -143,7 +143,7 @@ if __name__ == '__main__':
 
         # create logger
         logger = create_logger(**config['LoggerConfig'])
-        logger.info('-------------------------------- NEW UDB INSTANCE --------------------------------')
+        logger.info(f'-------------------------------- NEW UDB INSTANCE v{__version__} --------------------------------')
 
         logger.info(f'CLI options: {config_file = }, {series_type_predef = }, {series_name_predef = }, {series_year_predef = }, {episodes_predef = }, {resolution_predef = }, {start_download_predef = }')
 

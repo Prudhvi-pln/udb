@@ -59,7 +59,7 @@ class BaseClient():
         header = self.header
         if referer: header.update({'referer': referer})
         if extra_headers: header.update(extra_headers)
-        response = self.req_session.get(url, headers=header, verify=False)
+        response = self.req_session.get(url, timeout=self.request_timeout, headers=header, verify=False)
         # print(response)
         if response.status_code == 200:
             if not decode_json:
@@ -178,6 +178,10 @@ class BaseClient():
         '''
         if target_resolution in available_resolutions:
             return target_resolution
+
+        # return if there is only one resolution available. Also helpful if resolution = original
+        if len(available_resolutions) == 1:
+            return next(iter(available_resolutions))
 
         sorted_resolutions = sorted(available_resolutions, key=lambda x: int(x))
 

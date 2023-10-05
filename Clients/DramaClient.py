@@ -175,14 +175,23 @@ class DramaClient(BaseClient):
             cipher = self._get_cipher(self.key, self.iv)
             decoded_m3u8_response = self._decrypt(encrypted_m3u8_response, cipher)
             self.logger.debug(f'{decoded_m3u8_response = }')
-            master_m3u8_links = json.loads(decoded_m3u8_response)
+            decoded_m3u8_response = json.loads(decoded_m3u8_response)
 
         except Exception as e:
             return {'errorMsg': f'Invalid response received. Error: {e}'}
 
         # get m3u8 links containing resolutions [ source, bkp_source ]
-        master_m3u8_links = [ master_m3u8_links.get('source')[0]['file'], master_m3u8_links.get('source_bk')[0]['file'] ]
+        master_m3u8_links = []
+        _extract_master_m3u8 = lambda response, key: response.get(key)[0].get('file') if response.get(key) else None
+        # extract source & backup m3u8 links
+        for key in ['source', 'source_bk']:
+            m3u8_link = _extract_master_m3u8(decoded_m3u8_response, key)
+            if m3u8_link:
+                master_m3u8_links.append(m3u8_link)
+
         self.logger.debug(f'[source, bkp_source]: {master_m3u8_links = }')
+        if len(master_m3u8_links) == 0:
+            return {'errorMsg': 'No master m3u8 links found'}
 
         # re-order urls based on user preference
         ordered_master_m3u8_links = [ j for i in self.preferred_urls for j in master_m3u8_links if i in j ]
@@ -190,7 +199,10 @@ class DramaClient(BaseClient):
         ordered_master_m3u8_links.extend([ j for j in master_m3u8_links if j not in ordered_master_m3u8_links ])
         # remove blacklisted urls
         ordered_master_m3u8_links = [ j for j in ordered_master_m3u8_links if not any(i in j for i in self.blacklist_urls) ]
+
         self.logger.debug(f'{ordered_master_m3u8_links = }')
+        if len(ordered_master_m3u8_links) == 0:
+            return {'errorMsg': 'No master m3u8 links found after filtering'}
 
         counter = 0
         m3u8_links = {}
