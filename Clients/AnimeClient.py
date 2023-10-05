@@ -143,10 +143,10 @@ class AnimeClient(BaseClient):
         '''
         download_links = {}
         for episode in episodes:
-            self.logger.debug(f'Current {episode = }')
+            # self.logger.debug(f'Current {episode = }')
 
             if float(episode.get('episode')) >= ep_start and float(episode.get('episode')) <= ep_end:
-                self.logger.debug(f'Is selected')
+                self.logger.debug(f'Processing {episode = }')
                 episode_link = self.episode_url.replace('_anime_id_', self.anime_id).replace('_episode_id_', episode.get('session'))
 
                 self.logger.debug(f'Fetching kwik link for {episode_link = }')
@@ -156,8 +156,8 @@ class AnimeClient(BaseClient):
                 if links is not None:
                     # add episode uid & link to udb dict
                     self._update_udb_dict(episode.get('episode'), {'episodeId': episode.get('session'), 'episodeLink': episode_link})
-                    if len(links) > 0:
-                        download_links[episode.get('episode')] = links
+
+                    download_links[episode.get('episode')] = links
                     self._show_episode_links(episode.get('episode'), links)
 
         return download_links
@@ -211,7 +211,10 @@ class AnimeClient(BaseClient):
         '''
         return dict containing m3u8 links based on resolution
         '''
+        _get_ep_name = lambda resltn: f"{episode_prefix}{' ' if episode_prefix.endswith('movie') and len(target_links.items()) <= 1 else f' {ep} '}- {resltn}P.mp4"
+
         for ep, link in target_links.items():
+            error = None
             self.logger.debug(f'Epsiode: {ep}, Link: {link}')
             info = f'Episode: {self._safe_type_cast(ep)} |'
 
@@ -220,16 +223,16 @@ class AnimeClient(BaseClient):
             res_dict = link.get(selected_resolution)
             self.logger.debug(f'{selected_resolution = } based on {self.selector_strategy = }, Data: {res_dict = }')
 
-            if res_dict is None or len(res_dict) == 0:
-                self.logger.error(f'{info} Resolution [{resolution}] not found')
+            if 'error' in link:
+                error = link.get('error')
+
+            elif res_dict is None or len(res_dict) == 0:
+                error = f'Resolution [{resolution}] not found'
 
             else:
                 info = f'{info} {selected_resolution}P |'
                 try:
-                    if episode_prefix.endswith('movie') and len(target_links.items()) <= 1:
-                        ep_name = f'{episode_prefix} - {selected_resolution}P.mp4'
-                    else:
-                        ep_name = f'{episode_prefix} {ep} - {selected_resolution}P.mp4'
+                    ep_name = _get_ep_name(selected_resolution)
                     ep_name = self._windows_safe_string(ep_name)
                     kwik_link = res_dict['kwik']
 
@@ -246,9 +249,15 @@ class AnimeClient(BaseClient):
                     print(f'{info} Link found [{ep_link}]')
 
                 except Exception as e:
-                    self.logger.error(f'{info} Failed to fetch link with error [{e}]')
+                    error = f'Failed to fetch link with error [{e}]'
 
-        final_dict = { k:v for k,v in self._get_udb_dict().items() if v.get('m3u8Link') is not None }
+            if error:
+                # add error message and log it
+                ep_name = _get_ep_name(resolution)
+                self._update_udb_dict(ep, {'episodeName': ep_name, 'error': error})
+                self.logger.error(f'{info} {error}')
+
+        final_dict = { k:v for k,v in self._get_udb_dict().items() }
 
         return final_dict
 

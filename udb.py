@@ -1,4 +1,3 @@
-__version__ = '2.8'
 __author__ = 'Prudhvi PLN'
 
 import argparse
@@ -8,7 +7,7 @@ import traceback
 from Clients.AnimeClient import AnimeClient
 from Clients.DramaClient import DramaClient
 from Utils.HLSDownloader import downloader
-from Utils.commons import create_logger, threaded, load_yaml
+from Utils.commons import check_version, create_logger, threaded, load_yaml
 
 
 def get_series_type(keys, predefined_input=None):
@@ -91,7 +90,7 @@ def get_resolutions(items):
     genarator function to yield the resolutions of available episodes
     '''
     for item in items:
-        yield list(item.keys())
+        yield [ i for i in item.keys() if i not in ('error', 'original') ]
 
 def batch_downloader(download_fn, links, dl_config, max_parallel_downloads):
 
@@ -114,6 +113,11 @@ def batch_downloader(download_fn, links, dl_config, max_parallel_downloads):
 
 if __name__ == '__main__':
     try:
+        # check for latest version
+        __version__, status_code, status_message = check_version()
+        if status_code != 0:
+            print(status_message)
+
         # parse cli arguments
         parser = argparse.ArgumentParser(description='UDB Client to download entire anime / drama in one-shot.')
         parser.add_argument('-c', '--conf', default='config_udb.yaml',
@@ -125,6 +129,7 @@ if __name__ == '__main__':
         parser.add_argument('-e', '--episodes', action='append', help='episodes number to download')
         parser.add_argument('-r', '--resolution', type=str, help='resolution to download the episodes')
         parser.add_argument('-d', '--start-download', action='store_true', help='start download immediately or not')
+
 
         args = parser.parse_args()
         config_file = args.conf
@@ -260,19 +265,23 @@ if __name__ == '__main__':
         logger.info('Fetching m3u8 links for selected episodes')
         print('\nFetching Episode links:')
         target_dl_links = client.fetch_m3u8_links(target_ep_links, resolution, episode_prefix)
-        logger.debug(f'{target_dl_links = }')
+        available_dl_count = len([ k for k, v in target_dl_links.items() if v.get('m3u8Link') is not None ])
+        logger.debug(f'{target_dl_links = }, {available_dl_count = }')
 
         if len(target_dl_links) == 0:
             logger.error('No episodes available to download! Exiting.')
             exit(0)
 
+        msg = f'Episodes available for download [{available_dl_count}/{len(target_dl_links)}].'; print(f'\n{msg}', end=' ')
         if start_download_predef:
-            print(f'\nUsing Predefined Input for start download: {start_download_predef}')
+            print(f'Using Predefined Input for start download: {start_download_predef}')
             proceed = 'y'
+        elif available_dl_count == 0:
+            proceed = 'y'       # print download summary directly if no episodes available for download
         else:
-            proceed = input(f"\nProceed with downloading {len(target_dl_links)} episodes (y|n)? ").lower() or 'y'
+            proceed = input(f"Proceed to download (y|n)? ").lower() or 'y'
 
-        logger.info(f'Proceed with download? {proceed}')
+        logger.info(f'{msg} Proceed to download? {proceed}')
 
         if proceed == 'y':
             msg = f"Downloading episode(s) to {downloader_config['download_dir']}..."

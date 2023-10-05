@@ -1,4 +1,10 @@
 ## Changelog
+ - Version 2.9.0 [2023-10-06]
+   - Changed to Semantic versioning
+   - Implemented version check
+   - Bug fixes #4 #5
+   - Show skipped episodes in download summary
+
  - Version 2.8 [2023-10-04]
    - Added detailed loggers to make it developer friendly :)
    - Updated drama links

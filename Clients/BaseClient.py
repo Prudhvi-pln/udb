@@ -176,6 +176,9 @@ class BaseClient():
         '''
         Select a resolution based on selection strategy
         '''
+        if 'error' in available_resolutions:
+            return
+
         if target_resolution in available_resolutions:
             return target_resolution
 

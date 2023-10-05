@@ -1,11 +1,38 @@
 __author__ = 'Prudhvi PLN'
 
+import json
 import logging, os, sys
+import requests
 import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from time import sleep
 from logging.handlers import RotatingFileHandler
+
+
+def check_version():
+    '''
+    Check for the latest UDB version. Uses `version.txt` from GitHub Repo.
+    Returns:
+    - current version
+    - status code: 0=INFO, 1=WARN, 2=ERROR
+    - status message
+    '''
+    # get current version
+    with open(os.path.join(os.path.dirname(__file__), 'version.txt'), 'r') as f:
+        current_version = f.read().strip()
+
+    # get latest version from GitHub
+    try:
+        latest_version = json.loads(requests.get('https://github.com/Prudhvi-pln/udb/blob/main/Utils/version.txt').text)['payload']['blob']['rawLines'][0]
+    except Exception as e:
+        return (current_version, 2, f'ERROR: Unable to retrieve version information from Git')
+
+    # compare the versions
+    if current_version != latest_version:
+        return (current_version, 1, f'WARNING: Latest version {latest_version} available. Consider upgrading to the latest version')
+    else:
+        return (current_version, 0, f'Current version {current_version} is already the latest')
 
 # custom decorator for retring of a function
 def retry(exceptions=(Exception,), tries=3, delay=2, backoff=2, print_errors=False):

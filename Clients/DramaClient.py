@@ -2,7 +2,7 @@ __author__ = 'Prudhvi PLN'
 
 import json
 import re
-from urllib.parse import quote_plus
+from urllib.parse import parse_qs, quote_plus, urlparse
 
 from Clients.BaseClient import BaseClient
 
@@ -72,8 +72,8 @@ class DramaClient(BaseClient):
         pretty print episode links from fetch_episode_links
         '''
         info = f"Episode: {self._safe_type_cast(key)}"
-        if 'errorMsg' in details:
-            info += f' | {details["errorMsg"]}'
+        if 'error' in details:
+            info += f' | {details["error"]}'
             self.logger.error(info)
             return
 
@@ -149,10 +149,15 @@ class DramaClient(BaseClient):
         - Sort the resolutions in ascending order (already sorted by default)
         '''
         # extract url params & get id value
-        uid = { i.split('=')[0]:i.split('=')[1] for i in link.split('?')[1].split('&') }.get('id')
-        self.logger.debug(f'Extracted {uid = }')
+        uid = None
+        try:
+            uid = parse_qs(urlparse(link).query).get('id')[0]
+            self.logger.debug(f'Extracted {uid = }')
+        except:
+            pass
+
         if uid is None or uid == '':
-            return {'errorMsg': 'ID not found in stream link'}
+            return {'error': 'ID not found in stream link'}
 
         # encrypt the uid with new cipher
         self.logger.debug(f'Creating encrypted link')
@@ -178,7 +183,7 @@ class DramaClient(BaseClient):
             decoded_m3u8_response = json.loads(decoded_m3u8_response)
 
         except Exception as e:
-            return {'errorMsg': f'Invalid response received. Error: {e}'}
+            return {'error': f'Invalid response received. Error: {e}'}
 
         # get m3u8 links containing resolutions [ source, bkp_source ]
         master_m3u8_links = []
@@ -191,7 +196,7 @@ class DramaClient(BaseClient):
 
         self.logger.debug(f'[source, bkp_source]: {master_m3u8_links = }')
         if len(master_m3u8_links) == 0:
-            return {'errorMsg': 'No master m3u8 links found'}
+            return {'error': 'No master m3u8 links found'}
 
         # re-order urls based on user preference
         ordered_master_m3u8_links = [ j for i in self.preferred_urls for j in master_m3u8_links if i in j ]
@@ -202,7 +207,7 @@ class DramaClient(BaseClient):
 
         self.logger.debug(f'{ordered_master_m3u8_links = }')
         if len(ordered_master_m3u8_links) == 0:
-            return {'errorMsg': 'No master m3u8 links found after filtering'}
+            return {'error': 'No master m3u8 links found after filtering'}
 
         counter = 0
         m3u8_links = {}
@@ -297,10 +302,10 @@ class DramaClient(BaseClient):
         '''
         download_links = {}
         for episode in episodes:
-            self.logger.debug(f'Current {episode = }')
+            # self.logger.debug(f'Current {episode = }')
 
             if float(episode.get('episode')) >= ep_start and float(episode.get('episode')) <= ep_end:
-                self.logger.debug(f'Is selected')
+                self.logger.debug(f'Processing {episode = }')
 
                 self.logger.debug(f'Fetching stream link')
                 link = self._get_stream_link(episode.get('episodeLink'))
@@ -315,8 +320,7 @@ class DramaClient(BaseClient):
                     m3u8_links = self._get_m3u8_links(link)
                     self.logger.debug(f'Extracted {m3u8_links = }')
 
-                    if 'errorMsg' not in m3u8_links and len(m3u8_links) > 0:
-                        download_links[episode.get('episode')] = m3u8_links
+                    download_links[episode.get('episode')] = m3u8_links
                     self._show_episode_links(episode.get('episode'), m3u8_links)
 
         return download_links
@@ -332,7 +336,10 @@ class DramaClient(BaseClient):
         '''
         return dict containing m3u8 links based on resolution
         '''
+        _get_ep_name = lambda resltn: f'{self.udb_episode_dict.get(ep).get("episodeName")} - {resltn}P.mp4'
+
         for ep, link in target_links.items():
+            error = None
             self.logger.debug(f'Epsiode: {ep}, Link: {link}')
             info = f'Episode: {self._safe_type_cast(ep)} |'
 
@@ -341,13 +348,16 @@ class DramaClient(BaseClient):
             res_dict = link.get(selected_resolution)
             self.logger.debug(f'{selected_resolution = } based on {self.selector_strategy = }, Data: {res_dict = }')
 
-            if res_dict is None or len(res_dict) == 0:
-                self.logger.error(f'{info} Resolution [{resolution}] not found')
+            if 'error' in link:
+                error = link.get('error')
+
+            elif res_dict is None or len(res_dict) == 0:
+                error = f'Resolution [{resolution}] not found'
 
             else:
                 info = f'{info} {selected_resolution}P |'
                 try:
-                    ep_name = f'{self.udb_episode_dict.get(ep).get("episodeName")} - {selected_resolution}P.mp4'
+                    ep_name = _get_ep_name(selected_resolution)
                     ep_link = res_dict['m3u8Link']
                     # add m3u8 against episode
                     self._update_udb_dict(ep, {'episodeName': ep_name, 'm3u8Link': ep_link})
@@ -355,8 +365,14 @@ class DramaClient(BaseClient):
                     print(f'{info} Link found [{ep_link}]')
 
                 except Exception as e:
-                    self.logger.error(f'{info} Failed to fetch link with error [{e}]')
+                    error = f'Failed to fetch link with error [{e}]'
 
-        final_dict = { k:v for k,v in self._get_udb_dict().items() if v.get('m3u8Link') is not None }
+            if error:
+                # add error message and log it
+                ep_name = _get_ep_name(resolution)
+                self._update_udb_dict(ep, {'episodeName': ep_name, 'error': error})
+                self.logger.error(f'{info} {error}')
+
+        final_dict = { k:v for k,v in self._get_udb_dict().items() }
 
         return final_dict

@@ -230,16 +230,20 @@ def downloader(ep_details, dl_config):
     Accepts two dicts: download config, episode details
     Returns download status
     '''
-    m3u8_url = ep_details['m3u8Link']
-    referer = ep_details['refererLink']
-    out_file = ep_details['episodeName']
-    out_dir = dl_config['download_dir']
-    # create download client for the episode
-    dlClient = HLSDownloader(dl_config, referer, out_file)
-
     get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
     start = get_current_time()
     start_epoch = int(time())
+
+    out_file = ep_details['episodeName']
+
+    if 'm3u8Link' not in ep_details:
+        return f'[{start}] Download skipped for {out_file} due to error: {ep_details.get("error", "Unknown")}'
+
+    m3u8_url = ep_details['m3u8Link']
+    referer = ep_details['refererLink']
+    out_dir = dl_config['download_dir']
+    # create download client for the episode
+    dlClient = HLSDownloader(dl_config, referer, out_file)
 
     # create logger
     logger = logging.getLogger()

@@ -28,7 +28,7 @@ drama:
   - https://ttcx
   blacklist_urls:                             # avoid below urls while fetching m3u8 links
   - original
-  - storage-29
+  - storage-
 
 DownloaderConfig:
   download_dir: C:\Users\HP\Downloads\Video   # creates a target folder with name of series under this. Uses this, if none specified above
