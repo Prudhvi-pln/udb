@@ -8,10 +8,10 @@ Anime/Drama series downloader. Downloads the file using Http Live Streaming (HLS
  - HLS means Http Live Streaming. In IDM, you can see the file ending as .ts
  - It will contain main file .m3u8 which contains details of the segment files and a key
  - Algorithm to download this file:
-   - download all segments in .m3u8 & decrypt if required
+   - download all segments in .m3u8 & decrypt if required. Decrypt information is available in the same m3u8 file
    - combine the segments in same order as in m3u8
-   - convert the combined file to mp4 using ffmpeg
- - Coding this algo is fun, but you are lazy, so you are using m3u8downloader pip package
+   - convert the combined file to mp4 using ffmpeg / simply write to a file using with open. But ffmpeg is better as it is faster
+ - Coding this algo is fun, but if you are lazy, you can try m3u8downloader pip package
 
 ### Process Flow
  - get search results from __search_url__ _(every anime has a uid)_
@@ -41,3 +41,11 @@ Anime/Drama series downloader. Downloads the file using Http Live Streaming (HLS
  - AnimeClient is specific to a website
  - DramaClient is 70% generic. Just modify the config per website
  - HLSDownloader is 90% universal. 10% depends on HLS. If a new technique comes up in HLS, this needs to be updated
+
+### Version Check
+ - Purpose: check if the current version in your local is up-to-date.
+ - Approaches:
+   - Approach-1: use git hash and check the current and latest hashes. But what if git is not available in remote system?
+   - Approach-2: same as Approach-1 but use `gitpython` module instead of git. But what if _.git_ folder is deleted?
+   - Approach-3: maintain version.txt in Git and download it and compare the version in your local.
+ - Approach-3 works best as it uses requests to download and check the version. But make sure that version.txt is always updated before commiting any new changes.

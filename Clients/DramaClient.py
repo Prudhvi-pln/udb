@@ -187,7 +187,7 @@ class DramaClient(BaseClient):
 
         # get m3u8 links containing resolutions [ source, bkp_source ]
         master_m3u8_links = []
-        _extract_master_m3u8 = lambda response, key: response.get(key)[0].get('file') if response.get(key) else None
+        _extract_master_m3u8 = lambda response, key: response.get(key)[0].get('file') if response.get(key) and response.get(key)[0].get('type').lower() == 'hls' else None
         # extract source & backup m3u8 links
         for key in ['source', 'source_bk']:
             m3u8_link = _extract_master_m3u8(decoded_m3u8_response, key)
