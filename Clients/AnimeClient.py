@@ -243,8 +243,8 @@ class AnimeClient(BaseClient):
                     ep_link = self.parse_m3u8_link(raw_content)
                     self.logger.debug(f'Extracted & Parsed {ep_link = }')
 
-                    # add m3u8 & kwik links against episode
-                    self._update_udb_dict(ep, {'episodeName': ep_name, 'refererLink': kwik_link, 'm3u8Link': ep_link})
+                    # add m3u8 & kwik links against episode. set type of download link as hls
+                    self._update_udb_dict(ep, {'episodeName': ep_name, 'refererLink': kwik_link, 'downloadLink': ep_link, 'downloadType': 'hls'})
                     self.logger.debug(f'{info} Link found [{ep_link}]')
                     print(f'{info} Link found [{ep_link}]')
 

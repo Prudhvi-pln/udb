@@ -1,8 +1,10 @@
 __author__ = 'Prudhvi PLN'
 
 import json
-import logging, os, sys
+import logging
+import os
 import requests
+import sys
 import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps

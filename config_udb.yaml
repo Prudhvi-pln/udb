@@ -19,16 +19,14 @@ drama:
   episode_sub_type_element: ul.list-episode li img
   episode_upload_time_element: ul.list-episode li span
   stream_links_element: div.anime_muti_link div
-  m3u8_fetch_link: encrypt-ajax.php?id=
+  download_fetch_link: encrypt-ajax.php?id=
   request_timeout: 30
   alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
-  preferred_urls:                             # preferred urls while fetching m3u8 links. uses same order of preference
+  preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
   - https://fast
   - https://hls
   - https://ttcx
-  blacklist_urls:                             # avoid below urls while fetching m3u8 links
-  - original
-  - storage-
+  blacklist_urls:                             # avoid below urls while fetching download links
 
 DownloaderConfig:
   download_dir: C:\Users\HP\Downloads\Video   # creates a target folder with name of series under this. Uses this, if none specified above

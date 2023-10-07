@@ -1,4 +1,9 @@
 ## Changelog
+ - Version 2.10.0 [2023-10-07]
+   - Added new Downloader for non-m3u8 links 🎉
+   - Fixed #5
+   - Optimized Downloader under the hood
+
  - Version 2.9.0 [2023-10-06]
    - Changed to Semantic versioning
    - Implemented version check

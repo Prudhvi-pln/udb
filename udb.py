@@ -1,12 +1,15 @@
 __author__ = 'Prudhvi PLN'
 
 import argparse
+from datetime import datetime
 import os
+from time import time
 import traceback
 
 from Clients.AnimeClient import AnimeClient
 from Clients.DramaClient import DramaClient
-from Utils.HLSDownloader import downloader
+from Utils.BaseDownloader import BaseDownloader
+from Utils.HLSDownloader import HLSDownloader
 from Utils.commons import check_version, create_logger, threaded, load_yaml
 
 
@@ -92,13 +95,70 @@ def get_resolutions(items):
     for item in items:
         yield [ i for i in item.keys() if i not in ('error', 'original') ]
 
+def downloader(ep_details, dl_config):
+    '''
+    download function where Download Client initialization and download happens.
+    Accepts two dicts: download config, episode details. Returns download status.
+    '''
+    get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
+    start = get_current_time()
+    start_epoch = int(time())
+
+    out_file = ep_details['episodeName']
+
+    if 'downloadLink' not in ep_details:
+        return f'[{start}] Download skipped for {out_file}, due to error: {ep_details.get("error", "Unknown")}'
+
+    download_link = ep_details['downloadLink']
+    download_type = ep_details['downloadType']
+    referer = ep_details['refererLink']
+    out_dir = dl_config['download_dir']
+
+    # create download client for the episode based on type
+    if download_type == 'hls':
+        logger.debug(f'Creating HLS download client for {out_file}')
+        dlClient = HLSDownloader(dl_config, referer, out_file)
+
+    elif download_type == 'mp4':
+        logger.debug(f'Creating MP4 download client for {out_file}')
+        dlClient = BaseDownloader(dl_config, referer, out_file)
+
+    else:
+        return f'[{start}] Download skipped for {out_file}, due to unknown download type [{download_type}]'
+
+    logger.info(f'Download started for {out_file}...')
+
+    if os.path.isfile(os.path.join(f'{out_dir}', f'{out_file}')):
+        # skip file if already exists
+        return f'[{start}] Download skipped for {out_file}. File already exists!'
+    else:
+        try:
+            # main function where HLS download happens
+            status, msg = dlClient.start_download(download_link)
+        except Exception as e:
+            status, msg = 1, str(e)
+
+        # remove target dirs if no files are downloaded
+        dlClient._cleanup_out_dirs()
+
+        end = get_current_time()
+        if status != 0:
+            return f'[{end}] Download failed for {out_file}, with error: {msg}'
+
+        def pretty_time(sec):
+            h, m, s = sec // 3600, sec % 3600 // 60, sec % 3600 % 60
+            return '{:02d}h {:02d}m {:02d}s'.format(h,m,s) if h > 0 else '{:02d}m {:02d}s'.format(m,s)
+        end_epoch = int(time())
+        download_time = pretty_time(end_epoch-start_epoch)
+        return f'[{end}] Download completed for {out_file} in {download_time}!'
+
 def batch_downloader(download_fn, links, dl_config, max_parallel_downloads):
 
     @threaded(max_parallel=max_parallel_downloads, thread_name_prefix='udb-', print_status=False)
-    def start_download(link, dl_config):
+    def call_downloader(link, dl_config):
         return download_fn(link, dl_config)
 
-    dl_status = start_download(links.values(), dl_config)
+    dl_status = call_downloader(links.values(), dl_config)
     # show download status at the end, so that progress bars are not disturbed
     print("\033[K") # Clear to the end of line
     width = os.get_terminal_size().columns
@@ -265,7 +325,7 @@ if __name__ == '__main__':
         logger.info('Fetching m3u8 links for selected episodes')
         print('\nFetching Episode links:')
         target_dl_links = client.fetch_m3u8_links(target_ep_links, resolution, episode_prefix)
-        available_dl_count = len([ k for k, v in target_dl_links.items() if v.get('m3u8Link') is not None ])
+        available_dl_count = len([ k for k, v in target_dl_links.items() if v.get('downloadLink') is not None ])
         logger.debug(f'{target_dl_links = }, {available_dl_count = }')
 
         if len(target_dl_links) == 0:

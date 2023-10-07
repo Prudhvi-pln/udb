@@ -20,9 +20,9 @@ class DramaClient(BaseClient):
         self.episode_sub_type_element = config['episode_sub_type_element']
         self.episode_upload_time_element = config['episode_upload_time_element']
         self.stream_links_element = config['stream_links_element']
-        self.m3u8_fetch_link = config['m3u8_fetch_link']
-        self.preferred_urls = config['preferred_urls']
-        self.blacklist_urls = config['blacklist_urls']
+        self.download_fetch_link = config['download_fetch_link']
+        self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
+        self.blacklist_urls = config['blacklist_urls'] if config['blacklist_urls'] else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         # key & iv for decryption & encrytion. Don't know why it is working only for these
         # Reference: https://github.com/CoolnsX/dra-cla/blob/main/dra-cla
@@ -78,7 +78,7 @@ class DramaClient(BaseClient):
             return
 
         for _res, _vals in details.items():
-            info += f' | {_res}P ({_vals["resolution_size"]})' #| URL: {_vals["m3u8Link"]}
+            info += f' | {_res}P ({_vals["resolution_size"]})' #| URL: {_vals["downloadLink"]}
 
         print(info)
 
@@ -128,25 +128,21 @@ class DramaClient(BaseClient):
         resolution_names = _regex_list(master_m3u8_data, 'NAME="(.*)"', 1)
         resolution_links = _regex_list(master_m3u8_data, '(.*)m3u8', 0)
 
-        # if master m3u8 does not contain any resolutions, use default
-        if len(resolution_links) == 0:
-            m3u8_links = {'original': {'resolution_size': 'original', 'm3u8Link': master_m3u8_link}}
-            return m3u8_links
-
         for _res, _pixels, _link in zip(resolution_names, resolutions, resolution_links):
             # prepend base url if it is relative url
             m3u8_link = _link if _link.startswith('http') else base_url + '/' + _link
             m3u8_links[_res.replace('p','')] = {
                 'resolution_size': _pixels,
-                'm3u8Link': m3u8_link
+                'downloadLink': m3u8_link,
+                'downloadType': 'hls'
             }
 
         return m3u8_links
 
-    def _get_m3u8_links(self, link):
+    def _get_download_links(self, link):
         '''
-        retrieve m3u8 links from stream link and return available resolution links
-        - Sort the resolutions in ascending order (already sorted by default)
+        retrieve download links from stream link and return available resolution links
+        - Sort the resolutions in ascending order
         '''
         # extract url params & get id value
         uid = None
@@ -164,72 +160,94 @@ class DramaClient(BaseClient):
         cipher = self._get_cipher(self.key, self.iv)
         encrypted_id = self._encrypt(uid, cipher)
         stream_base_url = '/'.join(link.split('/')[:3])
-        encrypted_link = f'{stream_base_url}/{self.m3u8_fetch_link}{encrypted_id}'
+        encrypted_link = f'{stream_base_url}/{self.download_fetch_link}{encrypted_id}'
         self.logger.debug(f'{encrypted_link = }')
 
-        # get encrpyted response with m3u8 links
-        self.logger.debug(f'Fetch m3u8 links from encrypted url')
+        # get encrpyted response with download links
+        self.logger.debug(f'Fetch download links from encrypted url')
         response = self._send_request(encrypted_link, link, False)
 
         try:
-            encrypted_m3u8_response = json.loads(response)['data']
-            self.logger.debug(f'{encrypted_m3u8_response = }')
+            encrypted_response = json.loads(response)['data']
+            self.logger.debug(f'{encrypted_response = }')
 
-            # decode m3u8 response with new cipher
-            self.logger.debug(f'Decoding m3u8 response')
+            # decode the response with new cipher
+            self.logger.debug(f'Decoding the response')
             cipher = self._get_cipher(self.key, self.iv)
-            decoded_m3u8_response = self._decrypt(encrypted_m3u8_response, cipher)
-            self.logger.debug(f'{decoded_m3u8_response = }')
-            decoded_m3u8_response = json.loads(decoded_m3u8_response)
+            decoded_response = self._decrypt(encrypted_response, cipher)
+            self.logger.debug(f'{decoded_response = }')
+            decoded_response = json.loads(decoded_response)
 
         except Exception as e:
             return {'error': f'Invalid response received. Error: {e}'}
 
-        # get m3u8 links containing resolutions [ source, bkp_source ]
-        master_m3u8_links = []
-        _extract_master_m3u8 = lambda response, key: response.get(key)[0].get('file') if response.get(key) and response.get(key)[0].get('type').lower() == 'hls' else None
-        # extract source & backup m3u8 links
+        # extract & flatten all download links (including source & backup) from decoded response
+        download_links = []
         for key in ['source', 'source_bk']:
-            m3u8_link = _extract_master_m3u8(decoded_m3u8_response, key)
-            if m3u8_link:
-                master_m3u8_links.append(m3u8_link)
+            if decoded_response.get(key, '') != '':
+                download_links.extend(decoded_response.get(key))
 
-        self.logger.debug(f'[source, bkp_source]: {master_m3u8_links = }')
-        if len(master_m3u8_links) == 0:
-            return {'error': 'No master m3u8 links found'}
+        self.logger.debug(f'Extracted links: {download_links = }')
+        if len(download_links) == 0:
+            return {'error': 'No download links found'}
 
         # re-order urls based on user preference
-        ordered_master_m3u8_links = [ j for i in self.preferred_urls for j in master_m3u8_links if i in j ]
+        ordered_download_links = [ j for i in self.preferred_urls for j in download_links if i in j.get('file') ]
         # append remaining urls
-        ordered_master_m3u8_links.extend([ j for j in master_m3u8_links if j not in ordered_master_m3u8_links ])
+        ordered_download_links.extend([ j for j in download_links if j not in ordered_download_links ])
         # remove blacklisted urls
-        ordered_master_m3u8_links = [ j for j in ordered_master_m3u8_links if not any(i in j for i in self.blacklist_urls) ]
+        ordered_download_links = [ j for j in ordered_download_links if not any(i in j.get('file') for i in self.blacklist_urls) ]
 
-        self.logger.debug(f'{ordered_master_m3u8_links = }')
-        if len(ordered_master_m3u8_links) == 0:
-            return {'error': 'No master m3u8 links found after filtering'}
+        self.logger.debug(f'{ordered_download_links = }')
+        if len(ordered_download_links) == 0:
+            return {'error': 'No download links found after filtering'}
 
+        # extract resolution links from source links
+        self.logger.debug('Extracting resolution download links...')
         counter = 0
-        m3u8_links = {}
-        for master_m3u8_link in ordered_master_m3u8_links:
+        resolution_links = {}
+
+        for download_link in ordered_download_links:
             counter += 1
-            try:
-                self.logger.debug(f'Getting m3u8 from: {master_m3u8_link = }')
-                m3u8_links = self._parse_m3u8_links(master_m3u8_link, link)
-                self.logger.debug(f'Returned {m3u8_links = }')
-                if len(m3u8_links) > 0:
-                    self.logger.debug('m3u8 links obtained. No need to try with alternative. Breaking loop')
-                    break
-            except Exception as e:
-                # try with alternative master m3u8 link
-                self.logger.warning(f'Failed to fetch m3u8 links from {master_m3u8_link = }. Trying with alternative...')
-                if counter >= len(ordered_master_m3u8_links):
-                    self.logger.warning('No other alternatives found')
+            dlink = download_link.get('file')
+            dtype = download_link.get('type', '').strip().lower()
 
-        # if m3u8_links:      # sort the resolutions in ascending order
-        #     m3u8_links = dict(sorted(m3u8_links.items(), key=lambda x: int(x[0])))
+            if dtype == 'hls':
+                try:
+                    # extract inner m3u8 resolution links from master m3u8 link
+                    self.logger.debug(f'Found m3u8 link. Getting m3u8 links from master m3u8 link [{dlink}]')
+                    m3u8_links = self._parse_m3u8_links(dlink, link)
+                    self.logger.debug(f'Returned {m3u8_links = }')
+                    if len(m3u8_links) > 0:
+                        self.logger.debug('m3u8 links obtained. No need to try with alternative. Breaking loop')
+                        resolution_links.update(m3u8_links)
+                        break
+                except Exception as e:
+                    # try with alternative master m3u8 link
+                    self.logger.warning(f'Failed to fetch m3u8 links from {dlink = }. Trying with alternative...')
+                    if counter >= len(ordered_download_links):
+                        self.logger.warning('No other alternatives found')
 
-        return m3u8_links
+            elif dtype == 'mp4':
+                # if link is mp4, it is a direct download link
+                self.logger.debug(f'Found mp4 link. Adding the direct download link [{dlink}]')
+                resltn = download_link.get('label', 'unknown').split()[0]
+                resolution_links[resltn] = {
+                    'resolution_size': resltn,
+                    'downloadLink': dlink,
+                    'downloadType': 'mp4'
+                }
+
+            else:
+                # unknown download type
+                self.logger.warning(f'Unknown download type [{dtype}] for link [{dlink}]')
+
+        if resolution_links:      # sort the resolutions in ascending order
+            resolution_links = dict(sorted(resolution_links.items(), key=lambda x: int(x[0])))
+
+        self.logger.debug(f'Sorted resolution links: {resolution_links = }')
+
+        return resolution_links
 
     def search(self, keyword):
         '''
@@ -317,7 +335,7 @@ class DramaClient(BaseClient):
                     self._update_udb_dict(episode.get('episode'), {'streamLink': link, 'refererLink': link})
 
                     self.logger.debug(f'Extracting m3u8 links for {link = }')
-                    m3u8_links = self._get_m3u8_links(link)
+                    m3u8_links = self._get_download_links(link)
                     self.logger.debug(f'Extracted {m3u8_links = }')
 
                     download_links[episode.get('episode')] = m3u8_links
@@ -358,9 +376,11 @@ class DramaClient(BaseClient):
                 info = f'{info} {selected_resolution}P |'
                 try:
                     ep_name = _get_ep_name(selected_resolution)
-                    ep_link = res_dict['m3u8Link']
-                    # add m3u8 against episode
-                    self._update_udb_dict(ep, {'episodeName': ep_name, 'm3u8Link': ep_link})
+                    ep_link = res_dict['downloadLink']
+                    link_type = res_dict['downloadType']
+
+                    # add download link and it's type against episode
+                    self._update_udb_dict(ep, {'episodeName': ep_name, 'downloadLink': ep_link, 'downloadType': link_type})
                     self.logger.debug(f'{info} Link found [{ep_link}]')
                     print(f'{info} Link found [{ep_link}]')
 
