@@ -52,7 +52,7 @@ def retry(exceptions=(Exception,), tries=3, delay=2, backoff=2, print_errors=Fal
             while attempt < tries:
                 try:
                     return_status = func(*args, **kwargs)
-                    if 'ERROR' in return_status:
+                    if return_status[1] == 0:
                         raise Exception(return_status)
                     return return_status
                 except exceptions as e:
