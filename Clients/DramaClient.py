@@ -52,7 +52,7 @@ class DramaClient(BaseClient):
         soup = self._get_bsoup(link)
         # self.logger.debug(f'bsoup response for {link = }: {soup}')
         for stream in soup.select(self.stream_links_element):
-            if 'streaming.php' in stream['data-video']:
+            if 'active' in stream.get('class'):
                 stream_link = stream['data-video']
                 if stream_link.startswith('/'):
                     stream_link = 'https:' + stream_link
