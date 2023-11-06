@@ -19,18 +19,20 @@ class HLSDownloader(BaseDownloader):
         self.m3u8_file = os.path.join(f'{self.temp_dir}', 'uwu.m3u8')
         self.thread_name_prefix = 'udb-m3u8-'
 
-    def _is_encrypted(self, m3u8_data):
-        method = re.search('#EXT-X-KEY:METHOD=(.*),', m3u8_data)
+    def _has_uri(self, m3u8_data):
+        method = re.search('URI=(.*)', m3u8_data)
         if method is None: return False
         if method.group(1) == "NONE": return False
 
         return True
 
     def _collect_uri_iv(self, m3u8_data):
+        # Case-1: typical HLS using URI & IV
         uri_iv = re.search('#EXT-X-KEY:METHOD=AES-128,URI="(.*)",IV=(.*)', m3u8_data)
 
+        # Case-2: typical HLS using URI only
         if uri_iv is None:
-            uri_data = re.search('#EXT-X-KEY:METHOD=AES-128,URI="(.*)"', m3u8_data)
+            uri_data = re.search('URI="(.*)"', m3u8_data)
             return uri_data.group(1), None
 
         uri = uri_iv.group(1)
@@ -39,19 +41,10 @@ class HLSDownloader(BaseDownloader):
         return uri, iv
 
     def _collect_ts_urls(self, m3u8_link, m3u8_data):
-        # Case-1: typical HLS with AES-128
-        urls = [url.group(0) for url in re.finditer("https://(.*)\.ts(.*)", m3u8_data)]
-        if len(urls) == 0:
-            # Case-2: case-1 with relative paths
-            base_url = '/'.join(m3u8_link.split('/')[:-1])
-            urls = [base_url + "/" + url.group(0) for url in re.finditer("(.*)\.ts(.*)", m3u8_data)]
-            if len(urls) == 0:
-                # Case-3: sometimes HLS contain .css, .jpg and others. So, get all components not only .ts
-                urls = [base_url + "/" + url.group(0) for url in re.finditer('ep\.(.*)', m3u8_data)]
-
-        if len(urls) == 0:
-            # Case-4: HLS for AV1 codec
-            urls = [ url.group(0).replace('"', '') for url in re.finditer("https://(.*)", m3u8_data) ]
+        # Improved regex to handle all cases. (get all lines except those starting with #)
+        base_url = '/'.join(m3u8_link.split('/')[:-1])
+        normalize_url = lambda url, base_url: (url if url.startswith('http') else base_url + '/' + url)
+        urls = [ normalize_url(url.group(0), base_url) for url in re.finditer("^(?!#).+$", m3u8_data, re.MULTILINE) ]
 
         return urls
 
@@ -104,12 +97,12 @@ class HLSDownloader(BaseDownloader):
         self.logger.debug('Fetching stream data')
         m3u8_data = self._get_stream_data(m3u8_link, True)
 
-        self.logger.debug('Check if stream is encrypted')
-        is_encrypted = self._is_encrypted(m3u8_data)
-        if is_encrypted:
-            self.logger.debug('Stream is encrypted. Collect iv data and download key')
+        self.logger.debug('Check if stream is encrypted/mapped')
+        if self._has_uri(m3u8_data):
+            self.logger.debug('Stream is encrypted/mapped. Collect iv data and download key')
             key_uri, iv = self._collect_uri_iv(m3u8_data)
-            self._download_segment(key_uri)
+            status = self._download_segment(key_uri)
+            if status[1] == 0: self.logger.error(f'Failed to download key/map file with error: {status[0]}')
 
         # did not run into HLS with IV during development, so skipping it
         if iv:

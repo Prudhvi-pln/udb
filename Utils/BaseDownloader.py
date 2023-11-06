@@ -75,6 +75,7 @@ class BaseDownloader():
         if len(os.listdir(self.out_dir)) == 0: os.rmdir(self.out_dir)
 
     def _exec_cmd(self, cmd):
+        self.logger.debug(f'Executing command: {cmd}')
         proc = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
         # print stdout to console
         msg = proc.communicate()[0].decode("utf-8")
@@ -136,7 +137,7 @@ class BaseDownloader():
         failed_segments = 0
         ep_no = self._get_shortened_ep_name()
         type = metadata.pop('type')
-        self.logger.debug(f'[Epsiode-{ep_no}] Downloading {len(urls)} {type} using {self.concurrency} workers...')
+        self.logger.debug(f'[{ep_no}] Downloading {len(urls)} {type} using {self.concurrency} workers...')
 
         metadata.update({
             'desc': f'Downloading {ep_no}',

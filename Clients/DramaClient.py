@@ -137,6 +137,17 @@ class DramaClient(BaseClient):
                 'downloadType': 'hls'
             }
 
+        if len(m3u8_links) == 0:
+            # check for original keyword in the link, or if '#EXT-X-ENDLIST' in m3u8 data
+            master_is_child = re.search('#EXT-X-ENDLIST', master_m3u8_data)
+            if 'original' in master_m3u8_link or master_is_child:
+                self.logger.debug('master m3u8 link itself is the download link')
+                m3u8_links['720'] = {                            # set resolution size to 720 (assuming it as default. could be wrong)
+                    'resolution_size': 'Original (720|1080)',
+                    'downloadLink': master_m3u8_link,
+                    'downloadType': 'hls'
+                }
+
         return m3u8_links
 
     def _get_download_links(self, link):
@@ -218,10 +229,12 @@ class DramaClient(BaseClient):
                     self.logger.debug(f'Found m3u8 link. Getting m3u8 links from master m3u8 link [{dlink}]')
                     m3u8_links = self._parse_m3u8_links(dlink, link)
                     self.logger.debug(f'Returned {m3u8_links = }')
+
                     if len(m3u8_links) > 0:
                         self.logger.debug('m3u8 links obtained. No need to try with alternative. Breaking loop')
                         resolution_links.update(m3u8_links)
                         break
+
                 except Exception as e:
                     # try with alternative master m3u8 link
                     self.logger.warning(f'Failed to fetch m3u8 links from {dlink = }. Trying with alternative...')

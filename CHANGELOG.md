@@ -1,4 +1,9 @@
 ## Changelog
+ - Version 2.10.3 [2023-11-06]
+   - Updated Anime Client as per new APIs
+   - Updated Drama Client to fetch single m3u8 links
+   - Optimized HLS Downloader to fetch segment links
+
  - Version 2.10.0 [2023-10-07]
    - Added new Downloader for non-m3u8 links 🎉
    - Fixed #5

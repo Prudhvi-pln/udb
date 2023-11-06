@@ -59,6 +59,7 @@ class BaseClient():
         header = self.header
         if referer: header.update({'referer': referer})
         if extra_headers: header.update(extra_headers)
+        if decode_json: header.update({'accept': 'application/json, text/javascript'})
         response = self.req_session.get(url, timeout=self.request_timeout, headers=header, verify=False)
         # print(response)
         if response.status_code == 200:
