@@ -259,6 +259,10 @@ if __name__ == '__main__':
         episodes = client.fetch_episodes_list(target_series)
         print(f'{len(episodes)} episodes found.')
 
+        if len(episodes) == 0:
+            print('No episodes found in selected series! Exiting.')
+            exit(0)
+
         logger.info(f'Displaying episodes list')
         client.show_episode_results(episodes, episodes_predef)
 

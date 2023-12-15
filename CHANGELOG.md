@@ -1,4 +1,8 @@
 ## Changelog
+ - Version 2.10.4 [2023-12-15]
+   - Show total episodes count for a drama in search results
+   - Minor bug fixes
+
  - Version 2.10.3 [2023-11-06]
    - Updated Anime Client as per new APIs
    - Updated Drama Client to fetch single m3u8 links

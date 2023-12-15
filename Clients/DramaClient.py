@@ -42,6 +42,10 @@ class DramaClient(BaseClient):
             if ':' in line:
                 meta[line.split(':')[0].strip()] = line.split(':')[1].strip().split('\n')[0]
 
+        # add expected no of total episodes
+        match = re.search('Episodes:(.*)', soup.select('.info')[0].text)
+        meta['Expected Episodes'] = match.group(1).strip() if match else 'N/A'
+
         return meta
 
     def _get_stream_link(self, link):
@@ -62,9 +66,8 @@ class DramaClient(BaseClient):
         '''
         pretty print drama results based on your search
         '''
-        line = f"{key}: {details.get('title')} | Country: {details.get('Country')}\n   " + \
-                f"| Released: {details.get('year')} | Status: {details.get('Status')} " + \
-                f"| Genre: {details.get('Genre')}"
+        line = f"{key}: {details.get('title')} | Total Episodes: {details.get('Expected Episodes', 'N/A')} | Country: {details.get('Country')}" + \
+                f"\n   | Released: {details.get('year')} | Status: {details.get('Status')} | Genre: {details.get('Genre')}"
         print(line)
 
     def _show_episode_links(self, key, details):
@@ -142,8 +145,8 @@ class DramaClient(BaseClient):
             master_is_child = re.search('#EXT-X-ENDLIST', master_m3u8_data)
             if 'original' in master_m3u8_link or master_is_child:
                 self.logger.debug('master m3u8 link itself is the download link')
-                m3u8_links['720'] = {                            # set resolution size to 720 (assuming it as default. could be wrong)
-                    'resolution_size': 'Original (720|1080)',
+                m3u8_links['1080'] = {                            # set resolution size to 1080 (assuming it as default. could be wrong)
+                    'resolution_size': 'Original (HD)',
                     'downloadLink': master_m3u8_link,
                     'downloadType': 'hls'
                 }
