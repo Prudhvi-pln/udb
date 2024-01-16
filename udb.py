@@ -53,7 +53,10 @@ def search_and_select_series(predefined_search_input=None, predefined_year_input
 
         if search_results is None or len(search_results) == 0:
             logger.error('No matches found. Try with different keyword')
-            continue
+            if predefined_search_input is None and predefined_year_input is None:
+                continue
+            else:
+                exit(1)
 
         print("\nEnter 0 to search with different key word")
 

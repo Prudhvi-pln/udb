@@ -5,3 +5,4 @@ beautifulsoup4
 requests
 tqdm
 pycryptodome
+undetected-chromedriver

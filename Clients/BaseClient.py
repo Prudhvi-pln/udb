@@ -7,10 +7,17 @@ from bs4 import BeautifulSoup as BS
 from requests.adapters import HTTPAdapter
 from subprocess import Popen, PIPE
 from urllib3.util.retry import Retry
-# import cloudscraper as cs
+
+# modules for encryption used in Drama
 import base64
 import binascii
 from Crypto.Cipher import AES
+
+# modules to bypass DDoS protection
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
+from time import sleep
+import undetected_chromedriver as uc
 
 from Utils.commons import retry
 
@@ -19,6 +26,7 @@ class BaseClient():
     def __init__(self, request_timeout=30, session=None):
         # create a requests session and use across to re-use cookies
         self.req_session = session if session else requests.Session()
+        # self.req_session = session if session else cs.create_scraper()
         self.request_timeout = request_timeout
         # add retries with backoff
         retry = Retry(total=3, backoff_factor=0.1)
@@ -27,7 +35,6 @@ class BaseClient():
         self.req_session.mount('https://', adapter)
         # disable insecure warnings
         requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
-        # self.req_session = session if session else cs.create_scraper()
         self.header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
             "Accept-Encoding": "*",
@@ -51,7 +58,7 @@ class BaseClient():
         return self.udb_episode_dict
 
     @retry()
-    def _send_request(self, url, referer=None, decode_json=True, extra_headers=None):
+    def _send_request(self, url, referer=None, decode_json=True, extra_headers=None, cookies={}):
         '''
         call response session and return response
         '''
@@ -60,7 +67,7 @@ class BaseClient():
         if referer: header.update({'referer': referer})
         if extra_headers: header.update(extra_headers)
         if decode_json: header.update({'accept': 'application/json, text/javascript'})
-        response = self.req_session.get(url, timeout=self.request_timeout, headers=header, verify=False)
+        response = self.req_session.get(url, timeout=self.request_timeout, headers=header, cookies=cookies, verify=False)
         # print(response)
         if response.status_code == 200:
             if not decode_json:
@@ -71,13 +78,63 @@ class BaseClient():
         else:
             self.logger.error(f'Failed with response code: {response.status_code}')
 
-    def _get_bsoup(self, search_url, referer=None, extra_headers=None):
+    def _get_bsoup(self, search_url, referer=None, extra_headers=None, cookies={}):
         '''
         return html parsed soup
         '''
-        html_content = self._send_request(search_url, referer, False, extra_headers)
+        html_content = self._send_request(search_url, referer, False, extra_headers, cookies)
 
         return BS(html_content, 'html.parser')
+
+    def _get_site_cookies(self, url, check_condition, max_retries=3, wait_time_in_secs=5):
+        '''
+        Extract cookies required for authentication. Required to By-pass DDoS protection.
+        Returns a dictionary of cookies
+        '''
+        def __suppress_exception_in_del(uc):
+            '''
+            Suppress the exception saying "OSError: [WinError 6] The handle is invalid"
+            '''
+            old_del = uc.Chrome.__del__
+
+            def new_del(self) -> None:
+                try:
+                    old_del(self)
+                except:
+                    pass
+            
+            setattr(uc.Chrome, '__del__', new_del)
+
+        __suppress_exception_in_del(uc)
+
+        driver = uc.Chrome(headless=True)
+        driver.get(url)
+
+        retry_cnt = 1
+        while retry_cnt <= max_retries:
+            try:
+                self.logger.debug('Checking if site is loaded...')
+                driver.find_element(By.XPATH, check_condition)
+                break
+            except NoSuchElementException as nsee:
+                self.logger.debug(f'Site not loaded! Waiting for DDoS check to complete. Retry count: {retry_cnt} / {max_retries}')
+                retry_cnt += 1
+                sleep(wait_time_in_secs)
+
+        if retry_cnt > max_retries:
+            driver.quit()
+            raise Exception(f'Failed to load site within {max_retries*wait_time_in_secs} seconds')
+        else:
+            self.logger.debug('Site loaded successfully! Extracting cookies...')
+            all_cookies = driver.get_cookies()
+            driver.quit()
+
+        cookies = {}
+        for cookie in all_cookies:
+            cookies[cookie['name']] = cookie['value']
+        # self.logger.debug(f'Extracted cookies: {cookies}')
+
+        return cookies
 
     def _exec_cmd(self, cmd):
         proc = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)

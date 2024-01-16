@@ -1,5 +1,6 @@
 ## Changelog
- - Version 2.10.4 [2023-12-15]
+ - Version 2.10.5 [2024-01-17]
+   - Fix #7: Bypass DDoS check in AnimePahe (requires undetected chromedriver)
    - Show total episodes count for a drama in search results
    - Minor bug fixes
 

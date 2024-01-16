@@ -42,9 +42,20 @@ class DramaClient(BaseClient):
             if ':' in line:
                 meta[line.split(':')[0].strip()] = line.split(':')[1].strip().split('\n')[0]
 
-        # add expected no of total episodes
-        match = re.search('Episodes:(.*)', soup.select('.info')[0].text)
-        meta['Expected Episodes'] = match.group(1).strip() if match else 'N/A'
+        try:
+            # get last available episode if series is completed
+            if meta['Status'].lower() == 'completed':
+                tot_ep_cnt = soup.select(self.episode_link_element)[0].text.strip().split()[-1]
+
+            # if series is ongoing, get expected no of total episodes. works only for dramas where meta is available
+            else:
+                match = re.search('Episodes:(.*)', soup.select('.info')[0].text)
+                tot_ep_cnt = str(match.group(1).strip()) + ' (est.)' if match else 'N/A'
+
+        except:
+            tot_ep_cnt = 'N/A'
+
+        meta['Total Episodes'] = tot_ep_cnt
 
         return meta
 
@@ -66,7 +77,7 @@ class DramaClient(BaseClient):
         '''
         pretty print drama results based on your search
         '''
-        line = f"{key}: {details.get('title')} | Total Episodes: {details.get('Expected Episodes', 'N/A')} | Country: {details.get('Country')}" + \
+        line = f"{key}: {details.get('title')} | Total Episodes: {details.get('Total Episodes', 'N/A')} | Country: {details.get('Country')}" + \
                 f"\n   | Released: {details.get('year')} | Status: {details.get('Status')} | Genre: {details.get('Genre')}"
         print(line)
 
