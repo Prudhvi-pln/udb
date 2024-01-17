@@ -4,5 +4,5 @@ jsbeautifier
 beautifulsoup4
 requests
 tqdm
-pycryptodome
+pycryptodomex
 undetected-chromedriver

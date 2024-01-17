@@ -1,4 +1,7 @@
 ## Changelog
+ - Version 2.10.6 [2024-01-18]
+   - Fix #9: import error for Crypto.Cipher with pycryptodome. Replaced pycryptodome with pycryptodomex.
+
  - Version 2.10.5 [2024-01-17]
    - Fix #7: Bypass DDoS check in AnimePahe (requires undetected chromedriver)
    - Show total episodes count for a drama in search results
