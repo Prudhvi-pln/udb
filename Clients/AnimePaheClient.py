@@ -288,7 +288,7 @@ class AnimePaheClient(BaseClient):
         anime_title = self._windows_safe_string(target_series['title'])
         # set target output dir
         target_dir = f"{anime_title} ({target_series['year']})"
-        anime_type = 'movie' if target_series.get('type').lower() == 'movie' else 'episode'
+        anime_type = 'Movie' if target_series.get('type').lower() == 'movie' else 'Episode'
         episode_prefix = f"{anime_title} {anime_type}"
 
         return target_dir, episode_prefix
@@ -298,7 +298,7 @@ class AnimePaheClient(BaseClient):
         '''
         return dict containing m3u8 links based on resolution
         '''
-        _get_ep_name = lambda resltn: f"{episode_prefix}{' ' if episode_prefix.endswith('movie') and len(target_links.items()) <= 1 else f' {ep} '}- {resltn}P.mp4"
+        _get_ep_name = lambda resltn: f"{episode_prefix}{' ' if episode_prefix.lower().endswith('movie') and len(target_links.items()) <= 1 else f' {ep} '}- {resltn}P.mp4"
 
         for ep, link in target_links.items():
             error = None

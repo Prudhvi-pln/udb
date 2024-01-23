@@ -196,7 +196,7 @@ class GogoAnimeClient(BaseClient):
         # set target output dir
         target_dir = f"{anime_title} ({target_series['year']})"
         series_typ = target_series.get('Type')
-        anime_type = 'episode' if 'series' in series_typ.lower() or 'anime' in series_typ.lower() else series_typ
+        anime_type = 'Episode' if 'series' in series_typ.lower() or 'anime' in series_typ.lower() else series_typ
         episode_prefix = f"{anime_title} {anime_type}"
 
         return target_dir, episode_prefix
