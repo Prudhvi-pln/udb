@@ -19,22 +19,26 @@ The UDB is a fantastic tool designed for all the anime and drama lovers out ther
 - **Auto-Retry:** If a download fails, the downloader automatically retries until successful.
 - **Informative Progress Bar:** Track the progress of your downloads with a visually appealing progress bar.
 
+## Supported OS
+- Windows
+- Linux
+- Android (Termux only)
+
 ## Requirements
 
 To use the UDB, make sure you have the following requirements met:
 
 - Python 3.8 or higher
+- pip
 - Internet connection
-- pip dependencies
-  - _jsbeautifier_ to execute javascript for retrieving HLS
-  - _tqdm_ to show download progress
-  - _pycryptodome_ to encrypt/decrypt for Drama
 - ffmpeg
   - Windows:
     - download ffmpeg from [here](https://ffmpeg.org/download.html)
     - add to Environment variables > PATH
   - Linux (Ubuntu):
     - sudo apt install -y ffmpeg
+  - Android (Termux):
+    - pkg install ffmpeg
 
 ## Installation
 

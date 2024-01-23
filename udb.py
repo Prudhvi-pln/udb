@@ -6,10 +6,7 @@ import os
 from time import time
 import traceback
 
-from Clients.AnimeClient import AnimeClient
-from Clients.DramaClient import DramaClient
-from Utils.BaseDownloader import BaseDownloader
-from Utils.HLSDownloader import HLSDownloader
+# Note: For optimization, custom modules are imported as required
 from Utils.commons import check_version, create_logger, threaded, load_yaml
 
 
@@ -120,10 +117,12 @@ def downloader(ep_details, dl_config):
     # create download client for the episode based on type
     if download_type == 'hls':
         logger.debug(f'Creating HLS download client for {out_file}')
+        from Utils.HLSDownloader import HLSDownloader
         dlClient = HLSDownloader(dl_config, referer, out_file)
 
     elif download_type == 'mp4':
         logger.debug(f'Creating MP4 download client for {out_file}')
+        from Utils.BaseDownloader import BaseDownloader
         dlClient = BaseDownloader(dl_config, referer, out_file)
 
     else:
@@ -218,19 +217,27 @@ if __name__ == '__main__':
         # get series type
         series_type = get_series_type(config.keys(), series_type_predef)
         logger.info(f'Selected Series type: {series_type}')
+        __base_url = config[series_type]['base_url'].lower()
 
         # create client
         if 'anime' in series_type.lower():
-            logger.debug('Creating Anime client')
-            client = AnimeClient(config[series_type])
+            if 'animepahe' in __base_url:
+                logger.debug('Creating Anime Client for AnimePahe site')
+                from Clients.AnimePaheClient import AnimePaheClient
+                client = AnimePaheClient(config[series_type])
+            else:
+                logger.debug('Creating Anime Client for GogoAnime site')
+                from Clients.GogoAnimeClient import GogoAnimeClient
+                client = GogoAnimeClient(config[series_type])
         else:
-            logger.debug('Creating Drama client')
+            logger.debug('Creating Drama Client')
+            from Clients.DramaClient import DramaClient
             client = DramaClient(config[series_type])
         logger.info(f'Client: {client}')
 
         # set respective download dir if present
         if 'download_dir' in config[series_type]:
-            logger.debug('Setting download dir from series specific configuration')
+            logger.debug(f'Setting download dir to [{config[series_type]["download_dir"]}] from series specific configuration')
             downloader_config['download_dir'] = config[series_type]['download_dir']
 
         # modify path based on platform
@@ -291,7 +298,6 @@ if __name__ == '__main__':
         print("\nFetching Episodes & Available Resolutions:")
         target_ep_links = client.fetch_episode_links(episodes, ep_start, ep_end)
         logger.debug(f'Fetched episodes: {target_ep_links}')
-        # client.show_episode_links(target_ep_links)
 
         if len(target_ep_links) == 0:
             logger.error("No episodes are available for download! Exiting.")

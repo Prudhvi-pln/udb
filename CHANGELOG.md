@@ -1,4 +1,8 @@
 ## Changelog
+ - Version 2.11.0 [2024-01-24]
+   - Feature #8: Add support for GogoAnime
+   - Performance improvements and Minor bug fixes
+
  - Version 2.10.6 [2024-01-18]
    - Fix #9: import error for Crypto.Cipher with pycryptodome. Replaced pycryptodome with pycryptodomex.
 
