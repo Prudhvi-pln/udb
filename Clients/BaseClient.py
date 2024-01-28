@@ -6,7 +6,6 @@ import re
 import requests
 from bs4 import BeautifulSoup as BS
 from requests.adapters import HTTPAdapter
-from subprocess import Popen, PIPE
 from urllib.parse import parse_qs, urlparse
 from urllib3.util.retry import Retry
 
@@ -14,10 +13,13 @@ from urllib3.util.retry import Retry
 import base64
 from Cryptodome.Cipher import AES
 
-from Utils.commons import retry
+from Utils.commons import colprint, exec_os_cmd, pretty_time, retry
 
 
 class BaseClient():
+    '''
+    Base Client Implementation for Site-specific clients
+    '''
     def __init__(self, request_timeout=30, session=None):
         # create a requests session and use across to re-use cookies
         self.req_session = session if session else requests.Session()
@@ -52,11 +54,20 @@ class BaseClient():
     def _get_udb_dict(self):
         return self.udb_episode_dict
 
+    def _colprint(self, theme, text, **kwargs):
+        '''
+        Wrapper for color printer function
+        '''
+        if 'input' in theme:
+            return colprint(theme, text, **kwargs)
+        else:
+            colprint(theme, text, **kwargs)
+
     @retry()
     def _send_request(self, url, referer=None, extra_headers=None, cookies={}, return_type='text'):
         '''
         call response session and return response
-        Argument: return_type - valid options are text/json/bytes
+        Argument: return_type - valid options are text/json/bytes/raw
         '''
         # print(f'{self.req_session}: {url}')
         header = self.header
@@ -72,6 +83,8 @@ class BaseClient():
                 return response.content
             elif return_type.lower() == 'json':
                 return response.json()
+            elif return_type.lower() == 'raw':
+                return response
         else:
             self.logger.error(f'Failed with response code: {response.status_code}')
 
@@ -84,14 +97,7 @@ class BaseClient():
         return BS(html_content, 'html.parser')
 
     def _exec_cmd(self, cmd):
-        proc = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
-        # print stdout to console
-        msg = proc.communicate()[0].decode("utf-8")
-        std_err = proc.communicate()[1].decode("utf-8")
-        rc = proc.returncode
-        if rc != 0:
-            raise Exception(f"Error occured: {std_err}")
-        return msg
+        return exec_os_cmd(cmd)
 
     def _windows_safe_string(self, word):
         for i in self.invalid_chars:
@@ -134,18 +140,27 @@ class BaseClient():
         # self.logger.debug(f'{master_m3u8_data = }')
 
         _regex_list = lambda data, rgx, grp: [ url.group(grp) for url in re.finditer(rgx, data) ]
+        _full_link = lambda link: link if link.startswith('http') else base_url + '/' + link
         resolutions = _regex_list(master_m3u8_data, 'RESOLUTION=(.*),', 1)
         resolution_names = _regex_list(master_m3u8_data, 'NAME="(.*)"', 1)
         resolution_links = _regex_list(master_m3u8_data, '(.*)m3u8', 0)
 
+        # calculate duration from any resolution, as it is same for all resolutions
+        temp_link = _full_link(resolution_links[0]) if resolution_links else master_m3u8_link
+        duration = pretty_time(self._get_video_metadata(temp_link, 'hls')[0])
+
         for _res, _pixels, _link in zip(resolution_names, resolutions, resolution_links):
             # prepend base url if it is relative url
-            m3u8_link = _link if _link.startswith('http') else base_url + '/' + _link
+            m3u8_link = _full_link(_link)
             m3u8_links[_res.replace('p','')] = {
                 'resolution_size': _pixels,
                 'downloadLink': m3u8_link,
-                'downloadType': 'hls'
+                'downloadType': 'hls',
+                'duration': duration
             }
+            # get approx download size and add file size if available
+            file_size = self._get_download_size(m3u8_link, quality='approx')
+            if file_size: m3u8_links[_res.replace('p','')].update({'filesize': file_size})
 
         if len(m3u8_links) == 0:
             # check for original keyword in the link, or if '#EXT-X-ENDLIST' in m3u8 data
@@ -155,10 +170,75 @@ class BaseClient():
                 m3u8_links['1080'] = {                            # set resolution size to 1080 (assuming it as default. could be wrong)
                     'resolution_size': 'Original (HD)',
                     'downloadLink': master_m3u8_link,
-                    'downloadType': 'hls'
+                    'downloadType': 'hls',
+                    'duration': duration
                 }
+                # get approx download size and add file size if available
+                file_size = self._get_download_size(m3u8_link, quality='approx')
+                if file_size: m3u8_links['1080'].update({'filesize': file_size})
 
         return m3u8_links
+
+    # step-4.2.1 / 4.2.1.1 -- used in GogoAnime, MyAsianTV
+    def _get_video_metadata(self, link, link_type='mp4'):
+        '''
+        return duration & size of the video using ffprobe command
+        Note: size is available only for mp4 links
+        '''
+        duration, size = 0, None
+        try:
+            # Note: ffprobe is taking 3-10s, so try to avoid as much as possible
+            if link_type == 'hls':
+                self.logger.debug('Fetching video duration by parsing video link')
+                data = self._send_request(link)
+                duration = sum([ float(match.group(1)) for match in re.finditer('#EXTINF:(.*),', data) ])
+            else:
+                # add -show_streams in ffprobe to get more information
+                self.logger.debug('Fetching video duration using ffprobe command')
+                video_metadata = json.loads(self._exec_cmd(f'ffprobe -loglevel quiet -print_format json -show_format {link}'))
+                duration = float(video_metadata.get('format').get('duration'))
+                size = float(video_metadata.get('format').get('size'))
+                self.logger.debug(f'Size fetched is {size} bytes')
+
+            self.logger.debug(f'Duration fetched is {duration} seconds')
+
+        except Exception as e:
+            self.logger.warning(f'Failed to fetch video duration. Error: {e}')
+
+        return round(duration), size
+
+    # step-4.2.1.2
+    def _get_download_size(self, m3u8_link, quality='approx'):
+        '''
+        return the download file size (in MB) of a HLS stream based on estimation quality.
+        '''
+        # Note: current implementation is only for 'approx' quality.
+        # 'exact' quality requires to iterate through all segments in HLS which is not advisable.
+        # disabling this due to inaccuracy
+        return None
+        try:
+            self.logger.debug(f'Calculating {quality} download size for {m3u8_link = }')
+            m3u8_data = self._send_request(m3u8_link)
+            # extract ts segment urls. same as in HLS downloader
+            base_url = '/'.join(m3u8_link.split('/')[:-1])
+            normalize_url = lambda url, base_url: (url if url.startswith('http') else f'{base_url}/{url}')
+            urls = [ normalize_url(url.group(0), base_url) for url in re.finditer("^(?!#).+$", m3u8_data, re.MULTILINE) ]
+            # Logic for 'approx' quality: find content size of a few segments and multiply the average with number of segments
+            url_set = [urls[0], urls[len(urls)//2], urls[-1]] if quality == 'approx' else urls
+            # calculate average content length
+            content_lens = []
+            for url in url_set:
+                content_lens.append(float(self._send_request(url, return_type='raw').headers.get('content-length', 0)))
+            avg_content_len = sum(content_lens) / len(content_lens)
+            dl_size = avg_content_len * len(urls)       # total approx file size in bytes
+            dl_size = round(dl_size / (1024**2))        # bytes to MB
+            self.logger.indebugfo(f'{quality.capitalize()} download size is {dl_size} MB')
+
+        except Exception as e:
+            self.logger.warning(f'Failed to fetch download size for {m3u8_link = }. Error: {e}')
+            dl_size = None
+
+        return dl_size
 
     # step-4.2 -- used in GogoAnime, MyAsianTV
     def _get_download_links(self, **gdl_config):
@@ -288,19 +368,26 @@ class BaseClient():
 
                 except Exception as e:
                     # try with alternative master m3u8 link
-                    self.logger.warning(f'Failed to fetch m3u8 links from {dlink = }. Trying with alternative...')
+                    self.logger.warning(f'Failed to fetch m3u8 links from {dlink = } with error: {e}. Trying with alternative...')
                     if counter >= len(ordered_download_links):
                         self.logger.warning('No other alternatives found')
 
             elif dtype == 'mp4':
                 # if link is mp4, it is a direct download link
                 self.logger.debug(f'Found mp4 link. Adding the direct download link [{dlink}]')
+                duration, file_size = self._get_video_metadata(dlink, link_type='mp4')
+                duration = pretty_time(duration)
                 resltn = download_link.get('label', 'unknown').split()[0]
                 resolution_links[resltn] = {
                     'resolution_size': resltn,
                     'downloadLink': dlink,
-                    'downloadType': 'mp4'
+                    'downloadType': 'mp4',
+                    'duration': duration
                 }
+                # get actual download size and add file size if available
+                if file_size:
+                    file_size = round(file_size / (1024**2))    # Bytes to MB
+                    resolution_links[resltn].update({'filesize': file_size})
 
             else:
                 # unknown download type
@@ -358,7 +445,7 @@ class BaseClient():
             # display only required episodes if specified from cli
             show_range = predefined_range
         else:
-            show_range = input(f'Enter range to display (ex: 1-16) [default={default_range}]: ') or 'all'
+            show_range = self._colprint('user_input', f'Enter range to display (ex: 1-16) [default={default_range}]: ') or 'all'
             if show_range.lower() == 'all':
                 show_range = default_range
 
@@ -370,9 +457,9 @@ class BaseClient():
             pass    # show all episodes
 
         if show_range == default_range:
-            print('Showing all episodes:')
+            self._colprint('header', 'Showing all episodes:')
         else:
-            print(f'Showing episodes from {start} to {end}:')
+            self._colprint('header', f'Showing episodes from {start} to {end}:')
 
         return start, end
 

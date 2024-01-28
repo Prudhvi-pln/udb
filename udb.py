@@ -7,28 +7,74 @@ from time import time
 import traceback
 
 # Note: For optimization, custom modules are imported as required
-from Utils.commons import check_version, create_logger, threaded, load_yaml
+from Utils.commons import colprint_init, colprint, PRINT_THEMES
+from Utils.commons import get_current_version, check_for_updates, update_udb
+from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, threaded
 
+
+def get_client():
+    '''Return a client instance'''
+    __base_url = config[series_type]['base_url'].lower()
+    if 'anime' in series_type.lower():
+        if 'animepahe' in __base_url:
+            logger.debug('Creating Anime Client for AnimePahe site')
+            from Clients.AnimePaheClient import AnimePaheClient
+            return AnimePaheClient(config[series_type])
+        else:
+            logger.debug('Creating Anime Client for GogoAnime site')
+            from Clients.GogoAnimeClient import GogoAnimeClient
+            return GogoAnimeClient(config[series_type])
+    else:
+        logger.debug('Creating Drama Client')
+        from Clients.DramaClient import DramaClient
+        return DramaClient(config[series_type])
+
+def get_os_safe_path(tmp_path):
+    '''Returns OS corrected path'''
+    if os.sep == '\\' and '/mnt/' in tmp_path:
+        # platform is Windows and path is Linux, then convert to Windows path
+        logger.debug('Platform is Windows but Paths are Linux. Converting paths to Windows paths')
+        tmp_path = tmp_path.split('/')[2:]
+        tmp_path[0] = tmp_path[0].upper() + ':'
+        tmp_path = '\\'.join(tmp_path)
+    elif os.sep == '/' and ':\\' in tmp_path:
+        # platform is Linux and path is Windows, then convert to Linux path
+        logger.debug('Platform is Linux but Paths are Windows. Converting paths to Linux paths')
+        tmp_path = tmp_path.split('\\')
+        tmp_path[0] = tmp_path[0].lower().replace(':', '')
+        tmp_path = '/mnt/' + '/'.join(tmp_path)
+    else:
+        tmp_path = tmp_path.replace('/', os.sep).replace('\\', os.sep) # make sure the separator is correct
+
+    return tmp_path
+
+def check_if_exists(path):
+    logger.debug(f'Validating if download path [{path}] exists')
+    if os.path.isdir(path):
+        logger.debug('Download path exists')
+    else:
+        raise Exception(f'Download path [{path}] does not exist')
 
 def get_series_type(keys, predefined_input=None):
     logger.debug('Selecting the series type')
     types = {}
-    print('\nSelect type of series:')
+    colprint('header', '\nSelect type of series:')
     for idx, typ in enumerate(keys):
         if typ not in ['DownloaderConfig', 'LoggerConfig']:
-            print(f'{idx+1}: {typ.capitalize()}')
+            colprint('results', f'{idx+1}: {typ.capitalize()}')
             types[idx+1] = typ
 
     if predefined_input:
-        print(f'\nUsing Predefined Input: {predefined_input}')
+        colprint('predefined', f'\nUsing Predefined Input: {predefined_input}')
         series_type = predefined_input
     else:
-        series_type = int(input('\nEnter your choice: '))
+        series_type = int(colprint('user_input', '\nEnter your choice: '))
 
     logger.debug(f'Series type selected: {series_type}')
 
     if series_type not in types:
-        raise Exception('Invalid input!')
+        logger.error('Invalid input!')
+        exit(1)
     else:
         return types[series_type]
 
@@ -37,15 +83,16 @@ def search_and_select_series(predefined_search_input=None, predefined_year_input
         logger.debug("Search and select series")
         # get search keyword from user input
         if predefined_search_input:
-            print(f'\nUsing Predefined Input for search: {predefined_search_input}')
+            colprint('predefined', f'\nUsing Predefined Input for search: {predefined_search_input}')
             keyword = predefined_search_input
         else:
-            keyword = input("\nEnter series/movie name: ")
+            keyword = colprint('user_input', "\nEnter series/movie name: ")
 
         # search with keyword and show results
-        print("\nSearch Results:")
+        colprint('header', "\nSearch Results:")
         logger.info(f'Searching with keyword: {keyword}')
         search_results = client.search(keyword)
+        logger.info('Search Results Found')
         logger.debug(f'Search Results: {search_results}')
 
         if search_results is None or len(search_results) == 0:
@@ -55,7 +102,7 @@ def search_and_select_series(predefined_search_input=None, predefined_year_input
             else:
                 exit(1)
 
-        print("\nEnter 0 to search with different key word")
+        colprint('header', "\nEnter 0 to search with different key word")
 
         # get user selection for the search results
         try:
@@ -66,9 +113,9 @@ def search_and_select_series(predefined_search_input=None, predefined_year_input
                     if int(result['year']) == predefined_year_input:
                         option = idx
                         break
-                print(f'\nSelected option based on predefined year [{predefined_year_input}]: {option}')
+                colprint('predefined', f'\nSelected option based on predefined year [{predefined_year_input}]: {option}')
             elif option < 0:
-                option = int(input("\nSelect one of the above: "))
+                option = int(colprint('user_input', "\nSelect one of the above: "))
         except ValueError as ve:
             logger.error("Invalid input!")
             exit(1)
@@ -95,11 +142,35 @@ def get_resolutions(items):
     for item in items:
         yield [ i for i in item.keys() if i not in ('error', 'original') ]
 
+def get_ep_range(default_ep_range, mode='Enter', _episodes_predef=None):
+    if _episodes_predef:
+        colprint('predefined', f'\nUsing Predefined Input for episodes to download: {_episodes_predef}')
+        ep_range = _episodes_predef
+    else:
+        ep_range = colprint('user_input', f"\n{mode} episodes to download (ex: 1-16) [default={default_ep_range}]: ") or "all"
+        if str(ep_range).lower() == 'all':
+            ep_range = default_ep_range
+
+    logger.debug(f'Selected episode range ({mode = }): {ep_range = }')
+
+    try:
+        ep_start, ep_end = map(float, ep_range.split('-'))
+    except ValueError as ve:
+        ep_start = ep_end = float(ep_range)
+
+    return ep_start, ep_end
+
 def downloader(ep_details, dl_config):
     '''
     download function where Download Client initialization and download happens.
     Accepts two dicts: download config, episode details. Returns download status.
     '''
+    # load color themes
+    error_clr = PRINT_THEMES['error'] if not disable_colors else ''
+    success_clr = PRINT_THEMES['results'] if not disable_colors else ''
+    skipped_clr = PRINT_THEMES['predefined'] if not disable_colors else ''
+    reset_clr = PRINT_THEMES['reset'] if not disable_colors else ''
+
     get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
     start = get_current_time()
     start_epoch = int(time())
@@ -107,7 +178,7 @@ def downloader(ep_details, dl_config):
     out_file = ep_details['episodeName']
 
     if 'downloadLink' not in ep_details:
-        return f'[{start}] Download skipped for {out_file}, due to error: {ep_details.get("error", "Unknown")}'
+        return f'{error_clr}[{start}] Download skipped for {out_file}, due to error: {ep_details.get("error", "Unknown")}{reset_clr}'
 
     download_link = ep_details['downloadLink']
     download_type = ep_details['downloadType']
@@ -126,13 +197,13 @@ def downloader(ep_details, dl_config):
         dlClient = BaseDownloader(dl_config, referer, out_file)
 
     else:
-        return f'[{start}] Download skipped for {out_file}, due to unknown download type [{download_type}]'
+        return f'{error_clr}[{start}] Download skipped for {out_file}, due to unknown download type [{download_type}]{reset_clr}'
 
     logger.info(f'Download started for {out_file}...')
 
     if os.path.isfile(os.path.join(f'{out_dir}', f'{out_file}')):
         # skip file if already exists
-        return f'[{start}] Download skipped for {out_file}. File already exists!'
+        return f'{skipped_clr}[{start}] Download skipped for {out_file}. File already exists!{reset_clr}'
     else:
         try:
             # main function where HLS download happens
@@ -145,14 +216,11 @@ def downloader(ep_details, dl_config):
 
         end = get_current_time()
         if status != 0:
-            return f'[{end}] Download failed for {out_file}, with error: {msg}'
+            return f'{error_clr}[{end}] Download failed for {out_file}, with error: {msg}{reset_clr}'
 
-        def pretty_time(sec):
-            h, m, s = sec // 3600, sec % 3600 // 60, sec % 3600 % 60
-            return '{:02d}h {:02d}m {:02d}s'.format(h,m,s) if h > 0 else '{:02d}m {:02d}s'.format(m,s)
         end_epoch = int(time())
-        download_time = pretty_time(end_epoch-start_epoch)
-        return f'[{end}] Download completed for {out_file} in {download_time}!'
+        download_time = pretty_time(end_epoch-start_epoch, fmt='h m s')
+        return f'{success_clr}[{end}] Download completed for {out_file} in {download_time}!{reset_clr}'
 
 def batch_downloader(download_fn, links, dl_config, max_parallel_downloads):
 
@@ -161,40 +229,45 @@ def batch_downloader(download_fn, links, dl_config, max_parallel_downloads):
         return download_fn(link, dl_config)
 
     dl_status = call_downloader(links.values(), dl_config)
+
     # show download status at the end, so that progress bars are not disturbed
     print("\033[K") # Clear to the end of line
     width = os.get_terminal_size().columns
-    print('\u2500' * width)
-    status_str = 'Download Summary:'
+    header_clr = PRINT_THEMES['header'] if not disable_colors else ''
+    reset_clr = PRINT_THEMES['reset'] if not disable_colors else ''
+
+    colprint('header', '\u2500' * width)
+    status_str = f'{header_clr}Download Summary:{reset_clr}'
     for status in dl_status:
         status_str += f'\n{status}'
     # Once chatGPT suggested me to reduce 'print' usage as it involves IO to stdout
-    print(status_str); logger.info(status_str)
-    print('\u2500' * width)
+    print(status_str)
+    # strip ANSI before writing to log file
+    logger.info(strip_ansi(status_str))
+    colprint('header', '\u2500' * width)
 
 
 if __name__ == '__main__':
     try:
-        # check for latest version
-        __version__, status_code, status_message = check_version()
-        if status_code != 0:
-            print(status_message)
+        __version__ = get_current_version()
 
         # parse cli arguments
         parser = argparse.ArgumentParser(description='UDB Client to download entire anime / drama in one-shot.')
         parser.add_argument('-c', '--conf', default='config_udb.yaml',
-                            help='configuration file for udb client (default: config_udb.yaml)')
-        parser.add_argument('-v', '--version', action="version", version=f"{os.path.basename(__file__)} v{__version__}")
+                            help='configuration file for UDB client (default: config_udb.yaml)')
+        parser.add_argument('-v', '--version', default=False, action='store_true', help='display current version of UDB')
         parser.add_argument('-s', '--series-type', type=int, help='type of series')
         parser.add_argument('-n', '--series-name', help='name of the series to search')
         parser.add_argument('-y', '--series-year', type=int, help='release year of the series')
         parser.add_argument('-e', '--episodes', action='append', help='episodes number to download')
         parser.add_argument('-r', '--resolution', type=str, help='resolution to download the episodes')
         parser.add_argument('-d', '--start-download', action='store_true', help='start download immediately or not')
-
+        parser.add_argument('-dc', '--disable-colors', default=False, action='store_true', help='disable colored output')
+        parser.add_argument('-u', '--update', default=False, action='store_true', help='update UDB to the latest version available')
 
         args = parser.parse_args()
         config_file = args.conf
+        display_version = args.version
         series_type_predef = args.series_type
         series_name_predef = args.series_name
         series_year_predef = args.series_year
@@ -202,6 +275,35 @@ if __name__ == '__main__':
         resolution_predef = args.resolution
         # convert bool to y/n
         start_download_predef = 'y' if args.start_download else None
+        disable_colors = args.disable_colors
+        update_flag = args.update
+
+        # initialize color printer
+        colprint_init(disable_colors)
+
+        # display current version
+        if display_version:
+            colprint('yellow', f'{os.path.basename(__file__)} v{__version__}')
+
+        # check for latest version
+        status_code, status_message = check_for_updates(__version__)
+
+        # update udb to latest version if exists
+        if update_flag:
+            if status_code != 0:
+                update_udb()
+                __version__ = get_current_version()     # reload the version
+                status_message = f'UDB updated to version {__version__}'
+
+            colprint('header', status_message)
+            exit(0)
+
+        if status_code == 1:
+            colprint('blinking', status_message)
+        elif status_code == 2:
+            colprint('error', status_message)
+
+        if display_version: exit(0)     # display updates information and exit
 
         # load config from yaml to dict using yaml
         config = load_yaml(config_file)
@@ -212,27 +314,14 @@ if __name__ == '__main__':
         logger = create_logger(**config['LoggerConfig'])
         logger.info(f'-------------------------------- NEW UDB INSTANCE v{__version__} --------------------------------')
 
-        logger.info(f'CLI options: {config_file = }, {series_type_predef = }, {series_name_predef = }, {series_year_predef = }, {episodes_predef = }, {resolution_predef = }, {start_download_predef = }')
+        logger.info(f'CLI options: {args}')
 
         # get series type
         series_type = get_series_type(config.keys(), series_type_predef)
         logger.info(f'Selected Series type: {series_type}')
-        __base_url = config[series_type]['base_url'].lower()
 
         # create client
-        if 'anime' in series_type.lower():
-            if 'animepahe' in __base_url:
-                logger.debug('Creating Anime Client for AnimePahe site')
-                from Clients.AnimePaheClient import AnimePaheClient
-                client = AnimePaheClient(config[series_type])
-            else:
-                logger.debug('Creating Anime Client for GogoAnime site')
-                from Clients.GogoAnimeClient import GogoAnimeClient
-                client = GogoAnimeClient(config[series_type])
-        else:
-            logger.debug('Creating Drama Client')
-            from Clients.DramaClient import DramaClient
-            client = DramaClient(config[series_type])
+        client = get_client()
         logger.info(f'Client: {client}')
 
         # set respective download dir if present
@@ -240,24 +329,10 @@ if __name__ == '__main__':
             logger.debug(f'Setting download dir to [{config[series_type]["download_dir"]}] from series specific configuration')
             downloader_config['download_dir'] = config[series_type]['download_dir']
 
-        # modify path based on platform
-        tmp_path = downloader_config['download_dir']
-        if os.sep == '\\' and '/mnt/' in tmp_path:
-            # platform is Windows and path is Linux, then convert to Windows path
-            logger.debug('Platform is Windows but Paths are Linux. Converting paths to Windows paths')
-            tmp_path = tmp_path.split('/')[2:]
-            tmp_path[0] = tmp_path[0].upper() + ':'
-            tmp_path = '\\'.join(tmp_path)
-        elif os.sep == '/' and ':\\' in tmp_path:
-            # platform is Linux and path is Windows, then convert to Linux path
-            logger.debug('Platform is Linux but Paths are Windows. Converting paths to Linux paths')
-            tmp_path = tmp_path.split('\\')
-            tmp_path[0] = tmp_path[0].lower().replace(':', '')
-            tmp_path = '/mnt/' + '/'.join(tmp_path)
-        else:
-            tmp_path = tmp_path.replace('/', os.sep).replace('\\', os.sep) # make sure the separator is correct
-
-        downloader_config['download_dir'] = tmp_path
+        # modify path based on the platform OS
+        downloader_config['download_dir'] = get_os_safe_path(downloader_config['download_dir'])
+        # check if download path exists
+        check_if_exists(downloader_config['download_dir'])
 
         # search in an infinite loop till you get your series
         target_series = search_and_select_series(series_name_predef, series_year_predef)
@@ -265,37 +340,23 @@ if __name__ == '__main__':
 
         # fetch episode links
         logger.info(f'Fetching episodes list')
-        print(f'\nAvailable Episodes Details:', end=' ')
+        colprint('header', f'\nAvailable Episodes Details:', end=' ')
         episodes = client.fetch_episodes_list(target_series)
-        print(f'{len(episodes)} episodes found.')
+        colprint('results', f'{len(episodes)} episodes found.')
 
         if len(episodes) == 0:
-            print('No episodes found in selected series! Exiting.')
+            logger.error('No episodes found in selected series! Exiting.')
             exit(0)
 
         logger.info(f'Displaying episodes list')
         client.show_episode_results(episodes, episodes_predef)
 
-        # get user inputs
-        if episodes_predef:
-            print(f'\nUsing Predefined Input for episodes to download: {episodes_predef}')
-            ep_range = episodes_predef
-        else:
-            default_ep_range = f"{episodes[0]['episode']}-{episodes[-1]['episode']}"
-            ep_range = input(f"\nEnter episodes to download (ex: 1-16) [default={default_ep_range}]: ") or "all"
-            if str(ep_range).lower() == 'all':
-                ep_range = default_ep_range
-
-        logger.debug(f'Selected episode range: {ep_range = }')
-
-        try:
-            ep_start, ep_end = map(float, ep_range.split('-'))
-        except ValueError as ve:
-            ep_start = ep_end = float(ep_range)
+        # get user input for episodes range and parse start and end number
+        ep_start, ep_end = get_ep_range(f"{episodes[0]['episode']}-{episodes[-1]['episode']}", 'Enter', episodes_predef)
 
         # filter required episode links and print
         logger.info(f'Fetching episodes between {ep_start = } and {ep_end = }')
-        print("\nFetching Episodes & Available Resolutions:")
+        colprint('header', "\nFetching Episodes & Available Resolutions:")
         target_ep_links = client.fetch_episode_links(episodes, ep_start, ep_end)
         logger.debug(f'Fetched episodes: {target_ep_links}')
 
@@ -327,16 +388,16 @@ if __name__ == '__main__':
 
         # get valid resolution from user
         if resolution_predef:
-            print(f'\nUsing Predefined Input for resolution: {resolution_predef}')
+            colprint('predefined', f'\nUsing Predefined Input for resolution: {resolution_predef}')
             resolution = resolution_predef
         else:
-            resolution = input(f"\nEnter download resolution ({'|'.join(valid_resolutions)}) [default=720]: ") or "720"
+            resolution = colprint('user_input', f"\nEnter download resolution ({'|'.join(valid_resolutions)}) [default=720]: ") or "720"
 
         logger.info(f'Selected download resolution: {resolution}')
 
         # get m3u8 link for the specified resolution
         logger.info('Fetching m3u8 links for selected episodes')
-        print('\nFetching Episode links:')
+        colprint('header', '\nFetching Episode links:')
         target_dl_links = client.fetch_m3u8_links(target_ep_links, resolution, episode_prefix)
         available_dl_count = len([ k for k, v in target_dl_links.items() if v.get('downloadLink') is not None ])
         logger.debug(f'{target_dl_links = }, {available_dl_count = }')
@@ -345,25 +406,38 @@ if __name__ == '__main__':
             logger.error('No episodes available to download! Exiting.')
             exit(0)
 
-        msg = f'Episodes available for download [{available_dl_count}/{len(target_dl_links)}].'; print(f'\n{msg}', end=' ')
-        if start_download_predef:
-            print(f'Using Predefined Input for start download: {start_download_predef}')
+        msg = f'Episodes available for download [{available_dl_count}/{len(target_dl_links)}].'
+        colprint('header', f'\n{msg}', end=' ')
+        if available_dl_count == 0:
+            logger.error('\nNo episodes available to download! Exiting.')
+            exit(0)
+        elif start_download_predef:
+            colprint('predefined', f'Using Predefined Input for start download: {start_download_predef}')
             proceed = 'y'
-        elif available_dl_count == 0:
-            proceed = 'y'       # print download summary directly if no episodes available for download
         else:
-            proceed = input(f"Proceed to download (y|n)? ").lower() or 'y'
+            proceed = colprint('user_input', f"Proceed to download (y|n)? ").lower() or 'y'
 
         logger.info(f'{msg} Proceed to download? {proceed}')
 
         if proceed == 'y':
-            msg = f"Downloading episode(s) to {downloader_config['download_dir']}..."
-            logger.info(msg); print(f"\n{msg}")
-            # invoke downloader using a threadpool
-            logger.info(f'Invoking batch downloader with {max_parallel_downloads = }')
-            batch_downloader(downloader, target_dl_links, downloader_config, max_parallel_downloads)
+            pass
+        elif proceed == 'e':
+            # option for user to edit his choices. hidden option for dev ;)
+            new_ep_start, new_ep_end = get_ep_range(f"{ep_start}-{ep_end}", 'Edit')
+            # filter target download links based on new range
+            target_dl_links = { k:v for k,v in target_dl_links.items() if k >= new_ep_start and k <= new_ep_end }
+            logger.debug(f'Edited {target_dl_links = }')
+            colprint('yellow', f'Proceeding to download as per edited range [{new_ep_start} - {new_ep_end}]...')
         else:
             logger.error("Download halted on user input")
+            exit(0)
+
+        # start downloading...
+        msg = f"Downloading episode(s) to {downloader_config['download_dir']}..."
+        logger.info(msg); colprint('header', f"\n{msg}")
+        # invoke downloader using a threadpool
+        logger.info(f'Invoking batch downloader with {max_parallel_downloads = }')
+        batch_downloader(downloader, target_dl_links, downloader_config, max_parallel_downloads)
 
     except KeyboardInterrupt as ki:
         logger.error('User interrupted')

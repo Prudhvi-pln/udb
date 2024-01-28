@@ -1,8 +1,8 @@
 __author__ = 'Prudhvi PLN'
 
-import json
 import logging
 import os
+import re
 import requests
 import sys
 import yaml
@@ -10,31 +10,114 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from time import sleep
 from logging.handlers import RotatingFileHandler
+from subprocess import Popen, PIPE
 
 
-def check_version():
+# color themes
+PRINT_THEMES = {
+    'default': '\033[1m',       # white
+    'blurred': '\033[90m',      # black
+    'header': '\033[92m',       # green
+    'results': '\033[94m',      # blue
+    'predefined': '\033[33m',   # dark yellow
+    'user_input': '\033[93m',   # yellow
+    'yellow': '\033[93m',       # yellow
+    'success': '\033[32m',      # dark green
+    'error': '\033[91m',        # red
+    'blinking': '\033[5m',
+    'reset': '\033[0m'
+}
+DISPLAY_COLORS = True
+
+# strip ANSI characters, to write to log file
+strip_ansi = lambda text: re.sub(r'\x1b\[[0-9;]*m', '', text)
+
+def get_current_version():
     '''
-    Check for the latest UDB version. Uses `version.txt` from GitHub Repo.
-    Returns:
-    - current version
-    - status code: 0=INFO, 1=WARN, 2=ERROR
-    - status message
+    Returns the current version of UDB
     '''
-    # get current version
     with open(os.path.join(os.path.dirname(__file__), 'version.txt'), 'r') as f:
         current_version = f.read().strip()
 
+    return current_version
+
+def check_for_updates(current_version):
+    '''
+    Check for the latest UDB version. Uses `version.txt` from GitHub Repo.
+    Returns:
+    - status code: 0=INFO, 1=WARN, 2=ERROR
+    - status message
+    '''
     # get latest version from GitHub
     try:
-        latest_version = json.loads(requests.get('https://github.com/Prudhvi-pln/udb/blob/main/Utils/version.txt').text)['payload']['blob']['rawLines'][0]
+        latest_version = requests.get('https://github.com/Prudhvi-pln/udb/blob/main/Utils/version.txt').json()['payload']['blob']['rawLines'][0]
     except Exception as e:
-        return (current_version, 2, f'ERROR: Unable to retrieve version information from Git')
+        return (2, f'ERROR: Unable to retrieve latest version information from Git')
 
     # compare the versions
     if current_version != latest_version:
-        return (current_version, 1, f'WARNING: Latest version {latest_version} available. Consider upgrading to the latest version')
+        return (1, f'WARNING: Latest version {latest_version} available. Consider upgrading to the latest version by running: python udb.py --update')
     else:
-        return (current_version, 0, f'Current version {current_version} is already the latest')
+        return (0, f'Current version {current_version} is already the latest')
+
+def exec_os_cmd(cmd):
+    '''
+    Execute any OS commands
+    Args: command to be executed
+    Returns: output of executed command
+    '''
+    proc = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
+    # print stdout to console
+    msg = proc.communicate()[0].decode("utf-8")
+    std_err = proc.communicate()[1].decode("utf-8")
+    rc = proc.returncode
+    if rc != 0:
+        raise Exception(f"Error occured: {std_err}")
+    return msg
+
+def update_udb():
+    '''
+    Update UDB to the latest version available from Git
+    '''
+    colprint('predefined', 'Updating UDB to the latest version...')
+    try:
+        print(exec_os_cmd('git pull'))
+    except Exception as e:
+        colprint('error', f'Failed to update UDB:\n{e}')
+
+# display seconds in hh mm ss format
+def pretty_time(sec: int, fmt='hh:mm:ss'):
+    h, m, s = sec // 3600, sec % 3600 // 60, sec % 3600 % 60
+    if fmt == 'hh:mm:ss':
+        return '{:02d}:{:02d}:{:02d}'.format(h,m,s)
+    else:
+        return '{:02d}h {:02d}m {:02d}s'.format(h,m,s) if h > 0 else '{:02d}m {:02d}s'.format(m,s)
+
+# initialize colored printing
+def colprint_init(disable_colors):
+    if disable_colors:
+        global DISPLAY_COLORS
+        DISPLAY_COLORS = False
+    else:
+        os.system('')   # required to enable ANSI output in Windows terminals
+
+# custom stdout printer
+def colprint(theme, text, **kwargs):
+    '''Colorful print function.
+
+    Args:
+    - theme: color theme to be applied
+    - text: data to print
+    '''
+    if DISPLAY_COLORS:
+        c_strt, c_end = PRINT_THEMES.get(theme, '\033[1m'), PRINT_THEMES["reset"]
+    else:
+        c_strt, c_end = '', ''
+
+    if 'input' in theme:
+        return input(f'{c_strt}{text}{c_end}', **kwargs)
+    else:
+        print(f'{c_strt}{text}{c_end}', **kwargs)
 
 # custom decorator for retring of a function
 def retry(exceptions=(Exception,), tries=3, delay=2, backoff=2, print_errors=False):
@@ -56,12 +139,12 @@ def retry(exceptions=(Exception,), tries=3, delay=2, backoff=2, print_errors=Fal
                         raise Exception(return_status)
                     return return_status
                 except exceptions as e:
-                    # print(f'{e} | Attempt: {attempt} / {tries}')
+                    # colprint('error', f'{e} | Attempt: {attempt} / {tries}')
                     sleep(mdelay)
                     attempt += 1
                     mdelay *= backoff
                     if attempt >= tries and print_errors:
-                        print(f'{e} | Final Attempt: {attempt} / {tries}')
+                        colprint('error', f'{e} | Final Attempt: {attempt} / {tries}')
             return func(*args, **kwargs)
         return wrapper
     return decorator
@@ -91,7 +174,7 @@ def threaded(max_parallel=None, thread_name_prefix='udb-', print_status=False):
                         if print_status: print(f"\033[F\033[K\r{data}")
                         results[i] = data
                     except Exception as e:
-                        print(f'{e}')
+                        colprint('error', f'{e}')
 
             # sort the results in same order as received
             for idx, status in sorted(results.items()):
@@ -104,15 +187,26 @@ def threaded(max_parallel=None, thread_name_prefix='udb-', print_status=False):
 # load yaml config into dict
 def load_yaml(config_file):
     if not os.path.isfile(config_file):
-        print(f'Config file [{config_file}] not found')
+        colprint('error', f'Config file [{config_file}] not found')
         exit(1)
 
     with open(config_file, "r") as stream:
         try:
             return yaml.safe_load(stream)
         except yaml.YAMLError as exc:
-            print(f"Error occured while reading yaml file: {exc}")
+            colprint('error', f"Error occured while reading yaml file: {exc}")
             exit(1)
+
+# custom logging formatter to highlight error messages
+class CustomLogFormatter(logging.Formatter):
+    '''A Formatter to highlight error log level messages in red'''
+    def __init__(self, fmt=None, datefmt=None, style='%', validate=True):
+        super().__init__(fmt, datefmt, style, validate)
+
+    def format(self, record):
+        if record.levelname == 'ERROR' and DISPLAY_COLORS:
+            record.msg = f'{PRINT_THEMES["error"]}{record.msg}{PRINT_THEMES["reset"]}'
+        return super().format(record)
 
 # custom logger function
 def create_logger(**logger_config):
@@ -143,7 +237,8 @@ def create_logger(**logger_config):
             logger_config[key] = default_logging_config[key]
 
     # format the log entries
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(funcName)s:%(lineno)s - %(message)s')
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(funcName)s:%(lineno)s - %(message)s')
+    stdout_formatter = CustomLogFormatter()
     # get root logger
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
@@ -153,6 +248,7 @@ def create_logger(**logger_config):
 
     # create logging handler for stdout
     stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(stdout_formatter)
     stdout_handler.setLevel(logging.ERROR)
 
     # add rotating file handler to rotate log file when size crosses a threshold
@@ -162,7 +258,7 @@ def create_logger(**logger_config):
         backupCount = logger_config['log_backup_count'],
         encoding='utf-8'
     )
-    file_handler.setFormatter(formatter)
+    file_handler.setFormatter(file_formatter)
     file_handler.setLevel(log_levels.get(logger_config['log_level'].upper()))
 
     logger.addHandler(file_handler)     # print to file

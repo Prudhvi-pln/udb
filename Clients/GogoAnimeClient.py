@@ -7,7 +7,9 @@ from Clients.BaseClient import BaseClient
 
 
 class GogoAnimeClient(BaseClient):
-    '''Anime Client for GogoAnime site'''
+    '''
+    Anime Client for GogoAnime site
+    '''
     # step-0
     def __init__(self, config, session=None):
         super().__init__(config['request_timeout'], session)
@@ -64,7 +66,7 @@ class GogoAnimeClient(BaseClient):
         '''
         line = f"{key}: {details.get('title')} | {details.get('Type')} | Genre: {details.get('Genre')}" + \
                 f"\n   | Episodes: {details.get('Episodes', 'N/A')} | Released: {details.get('year')} | Status: {details.get('Status')}"
-        print(line)
+        self._colprint('results', line)
 
     # step-4.3
     def _show_episode_links(self, key, details):
@@ -77,10 +79,17 @@ class GogoAnimeClient(BaseClient):
             self.logger.error(info)
             return
 
+        try:
+            duration = next(iter(details.values())).get("duration", "NA")
+        except:
+            duration = 'NA'
+        info += f' (duration: {duration})'    # get duration from any resolution dict
+
         for _res, _vals in details.items():
             info += f' | {_res}P ({_vals["resolution_size"]})' #| URL: {_vals["downloadLink"]}
+            if 'filesize' in _vals: info += f' [~{_vals["filesize"]} MB]'
 
-        print(info)
+        self._colprint('results', info)
 
     # step-1
     def search(self, keyword, search_limit=10):
@@ -150,7 +159,7 @@ class GogoAnimeClient(BaseClient):
 
         for item in items:
             if item.get('episode') >= start and item.get('episode') <= end:
-                print(f"Episode: {self._safe_type_cast(item.get('episode'))} | Subs: {item.get('episodeSubs')}")
+                self._colprint('results', f"Episode: {self._safe_type_cast(item.get('episode'))} | Subs: {item.get('episodeSubs')}")
 
     # step-4
     def fetch_episode_links(self, episodes, ep_start, ep_end):
@@ -234,7 +243,7 @@ class GogoAnimeClient(BaseClient):
                     # add download link and it's type against episode
                     self._update_udb_dict(ep, {'episodeName': ep_name, 'downloadLink': ep_link, 'downloadType': link_type})
                     self.logger.debug(f'{info} Link found [{ep_link}]')
-                    print(f'{info} Link found [{ep_link}]')
+                    self._colprint('results', f'{info} Link found [{ep_link}]')
 
                 except Exception as e:
                     error = f'Failed to fetch link with error [{e}]'

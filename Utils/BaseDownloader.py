@@ -3,20 +3,20 @@ __author__ = 'Prudhvi PLN'
 import logging
 import os
 import requests
-import shutil
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from requests.adapters import HTTPAdapter
-from subprocess import Popen, PIPE
+from shutil import rmtree
 from tqdm.auto import tqdm
 from urllib3.util.retry import Retry
 
-from Utils.commons import retry
+from Utils.commons import colprint, exec_os_cmd, retry, PRINT_THEMES, DISPLAY_COLORS
 
 
 class BaseDownloader():
-    '''Download Client for downloading files directly using requests'''
-
+    '''
+    Download Client for downloading files directly using requests
+    '''
     def __init__(self, dl_config, referer_link, out_file, session=None):
         # logger init
         self.logger = logging.getLogger()
@@ -46,6 +46,15 @@ class BaseDownloader():
             "Referer": self.referer
         }
 
+    def _colprint(self, theme, text, **kwargs):
+        '''
+        Wrapper for color printer function
+        '''
+        if 'input' in theme:
+            return colprint(theme, text, **kwargs)
+        else:
+            colprint(theme, text, **kwargs)
+
     def _get_raw_stream_data(self, url, stream=True, header=None):
         # print(f'{self.req_session}: {url}')
         if header is not None:
@@ -68,22 +77,15 @@ class BaseDownloader():
         os.makedirs(self.temp_dir, exist_ok=True)
 
     def _remove_out_dirs(self):
-        shutil.rmtree(self.temp_dir)
+        return
+        rmtree(self.temp_dir)
 
     def _cleanup_out_dirs(self):
         if len(os.listdir(self.parent_temp_dir)) == 0: os.rmdir(self.parent_temp_dir)
         if len(os.listdir(self.out_dir)) == 0: os.rmdir(self.out_dir)
 
     def _exec_cmd(self, cmd):
-        self.logger.debug(f'Executing command: {cmd}')
-        proc = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
-        # print stdout to console
-        msg = proc.communicate()[0].decode("utf-8")
-        std_err = proc.communicate()[1].decode("utf-8")
-        rc = proc.returncode
-        if rc != 0:
-            raise Exception(f"Error occured: {std_err}")
-        return msg
+        return exec_os_cmd(cmd)
 
     def _get_shortened_ep_name(self):
         # shorten the name to show only ep number
@@ -139,12 +141,13 @@ class BaseDownloader():
         type = metadata.pop('type')
         self.logger.debug(f'[{ep_no}] Downloading {len(urls)} {type} using {self.concurrency} workers...')
 
+        theme = PRINT_THEMES['results'] if DISPLAY_COLORS else ''
         metadata.update({
             'desc': f'Downloading {ep_no}',
             'file': sys.stdout,
-            'colour': 'green',
             'ascii': '░▒█',
-            'leave': True
+            'leave': True,
+            'bar_format': theme + '{l_bar}{bar}' + theme + '{r_bar}'
         })
 
         # show progress of download using tqdm
@@ -156,7 +159,7 @@ class BaseDownloader():
                 for result in as_completed(results):
                     status, size = result.result()
                     if 'ERROR' in status:
-                        print(status)
+                        self._colprint('error', status)
                         failed_segments += 1
                     elif 'Reusing' in status:
                         reused_segments += 1

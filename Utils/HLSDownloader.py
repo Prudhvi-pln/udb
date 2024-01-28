@@ -130,13 +130,3 @@ class HLSDownloader(BaseDownloader):
         self._remove_out_dirs()
 
         return (0, None)
-
-
-# if __name__ == '__main__':
-#     config = {'download_dir': r'C:\Users\HP\Downloads\Video\Eulachacha Waikiki 2 (2019) temp',
-#               'temp_download_dir': r'C:\Users\HP\Downloads\Video\Eulachacha Waikiki 2 (2019)\temp_dir',
-#               'concurrency_per_file': 4,
-#               'request_timeout': 30
-#     }
-#     dict = {'episodeId': 'bd89c830c98859006cdce06eb5ba92a885fe9278f98734434dc84b98b0006e5b', 'episodeLink': 'https://animepahe.com/play/1f4869d2-0cfb-4680-59c9-7ff936726d30/bd89c830c98859006cdce06eb5ba92a885fe9278f98734434dc84b98b0006e5b', 'episodeName': 'Gokushufudou Season 2 episode 4 - 360P.mp4', 'refererLink': 'https://kwik.cx/e/sdl9rsfFlVts', 'downloadLink': 'https://eu-111.cache.nextcdn.org/stream/11/03/1ad144913c0b8b1e4f9c22a041627ddaff21fffc0b23aa5afee00fc3663410e1/uwu.m3u8'}
-#     print(downloader(dict, config))

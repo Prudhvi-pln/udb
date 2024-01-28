@@ -1,7 +1,10 @@
 ## Changelog
- - Version 2.11.0 [2024-01-24]
-   - Feature #8: Add support for GogoAnime
-   - Performance improvements and Minor bug fixes
+ - Version 2.11.2 [2024-01-28]
+   - Implemented Feature #8: Support for GogoAnime.
+   - The UDB interface is now vibrant with colors. Explore the enhanced cli visual experience!
+   - Introduced an option to update UDB directly within the application.
+   - Added a new feature to display video duration information.
+   - Included performance enhancements and addressed minor bugs for a smoother user experience.
 
  - Version 2.10.6 [2024-01-18]
    - Fix #9: import error for Crypto.Cipher with pycryptodome. Replaced pycryptodome with pycryptodomex.

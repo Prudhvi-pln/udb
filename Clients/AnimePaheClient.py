@@ -1,6 +1,7 @@
 __author__ = 'Prudhvi PLN'
 
 import json
+import os
 import re
 import jsbeautifier as js
 from urllib.parse import quote_plus
@@ -15,7 +16,9 @@ from Clients.BaseClient import BaseClient
 
 
 class AnimePaheClient(BaseClient):
-    '''Anime Client for AnimePahe site'''
+    '''
+    Anime Client for AnimePahe site
+    '''
     # step-0
     def __init__(self, config, session=None):
         super().__init__(config['request_timeout'], session)
@@ -48,9 +51,39 @@ class AnimePaheClient(BaseClient):
             
             setattr(uc.Chrome, '__del__', new_del)
 
+        def __get_chrome_version(chrome_path):
+            '''
+            Get the Chrome version dynamically
+            '''
+            if '\\' in chrome_path:     # = Windows OS
+                is_match = lambda word: re.search('\d+\.\d+\.\d+\.\d+', word)
+                get_version = lambda path: [ is_match(d).group(0) for d in os.listdir(os.path.dirname(path)) if is_match(d) ][0]
+                version = get_version(chrome_path)
+            else:                       # = Linux OS
+                version = self._exec_cmd(f'{chrome_path} --version').strip('Google Chrome ').strip()
+
+            return int(version.split('.')[0])
+
+        self.logger.debug('Suppressing exit exception in Chrome driver')
         __suppress_exception_in_del(uc)
 
-        driver = uc.Chrome(headless=True)
+        # check if chrome is installed
+        self.logger.debug('Checking if Chrome is installed')
+        chrome_path = uc.find_chrome_executable()
+        if chrome_path is None or chrome_path == '':
+            self.logger.error('AnimePahe requires a chrome browser to be installed. Unable to proceed further!')
+            exit(1)
+
+        # dynamically fetch the chrome version
+        self.logger.debug('Dynamically fetching the installed Chrome version')
+        try:
+            main_version = __get_chrome_version(chrome_path)
+            self.logger.debug(f'Current chrome version: {main_version}')
+        except Exception as e:
+            self.logger.error(f'Failed to fetch Chrome version. Error: {e}')
+            exit(1)
+
+        driver = uc.Chrome(headless=True, version_main=main_version)
         driver.get(url)
 
         retry_cnt = 1
@@ -87,7 +120,7 @@ class AnimePaheClient(BaseClient):
         info = f"{key}: {details.get('title')} | {details.get('type')}\n   " + \
                 f"| Episodes: {details.get('episodes')} | Released: {details.get('year')}, {details.get('season')} " + \
                 f"| Status: {details.get('status')}"
-        print(info)
+        self._colprint('results', info)
 
     # step-4.1 - obsolete
     def _get_kwik_links(self, ep_id):
@@ -154,7 +187,7 @@ class AnimePaheClient(BaseClient):
             except:
                 info += f' | {filesize} [{_vals["audio"]}]'
 
-        print(info)
+        self._colprint('results', info)
 
     # step-6.1
     def get_m3u8_content(self, kwik_link, ep_no):
@@ -255,7 +288,7 @@ class AnimePaheClient(BaseClient):
 
         for item in items:
             if item.get('episode') >= start and item.get('episode') <= end:
-                print(f"Episode: {self._safe_type_cast(item.get('episode'))} | Audio: {item.get('audio')} | Duration: {item.get('duration')} | Release date: {item.get('created_at')}")
+                self._colprint('results', f"Episode: {self._safe_type_cast(item.get('episode'))} | Audio: {item.get('audio')} | Duration: {item.get('duration')} | Release date: {item.get('created_at')}")
 
     # step-4
     def fetch_episode_links(self, episodes, ep_start, ep_end):
@@ -333,7 +366,7 @@ class AnimePaheClient(BaseClient):
                     # add m3u8 & kwik links against episode. set type of download link as hls
                     self._update_udb_dict(ep, {'episodeName': ep_name, 'refererLink': kwik_link, 'downloadLink': ep_link, 'downloadType': 'hls'})
                     self.logger.debug(f'{info} Link found [{ep_link}]')
-                    print(f'{info} Link found [{ep_link}]')
+                    self._colprint('results', f'{info} Link found [{ep_link}]')
 
                 except Exception as e:
                     error = f'Failed to fetch link with error [{e}]'
