@@ -77,7 +77,6 @@ class BaseDownloader():
         os.makedirs(self.temp_dir, exist_ok=True)
 
     def _remove_out_dirs(self):
-        return
         rmtree(self.temp_dir)
 
     def _cleanup_out_dirs(self):
