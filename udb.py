@@ -14,6 +14,8 @@ from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, thr
 
 def get_client():
     '''Return a client instance'''
+    # add hls_size_accuracy parameter passed from cli
+    config[series_type].update({'hls_size_accuracy': hls_size_accuracy})
     __base_url = config[series_type]['base_url'].lower()
     if 'anime' in series_type.lower():
         if 'animepahe' in __base_url:
@@ -137,32 +139,49 @@ def search_and_select_series(predefined_search_input=None, predefined_year_input
 
 def get_resolutions(items):
     '''
-    genarator function to yield the resolutions of available episodes
+    Genarator function to yield the resolutions of available episodes
     '''
     for item in items:
         yield [ i for i in item.keys() if i not in ('error', 'original') ]
 
 def get_ep_range(default_ep_range, mode='Enter', _episodes_predef=None):
+    '''
+    Get the episode range from user input.
+    Returns tuple of episode range start, episode range end, list of specific episodes.
+    '''
     if _episodes_predef:
         colprint('predefined', f'\nUsing Predefined Input for episodes to download: {_episodes_predef}')
-        ep_range = _episodes_predef
+        ep_user_input = _episodes_predef
     else:
-        ep_range = colprint('user_input', f"\n{mode} episodes to download (ex: 1-16) [default={default_ep_range}]: ") or "all"
-        if str(ep_range).lower() == 'all':
-            ep_range = default_ep_range
+        ep_user_input = colprint('user_input', f"\n{mode} episodes to download (ex: 1-16) [default={default_ep_range}]: ") or "all"
+        if str(ep_user_input).lower() == 'all':
+            ep_user_input = default_ep_range
 
-    logger.debug(f'Selected episode range ({mode = }): {ep_range = }')
+    logger.debug(f'Selected episode range ({mode = }): {ep_user_input = }')
 
-    try:
-        ep_start, ep_end = map(float, ep_range.split('-'))
-    except ValueError as ve:
-        ep_start = ep_end = float(ep_range)
+    # keep track of episode ranges in input
+    if ep_user_input.count('-') > 1:
+        logger.error('Invalid input! You must specify only one range.')
+        return get_ep_range(default_ep_range, mode, _episodes_predef)
 
-    return ep_start, ep_end
+    ep_start, ep_end, specific_eps = 0, 0, []
+    for ep_range in ep_user_input.split(','):
+        if '-' in ep_range:                             # process the range if '-' is found
+            ep_range = ep_range.split('-')
+            if ep_range[0] == '':
+                ep_range[0] = default_ep_range.split('-')[0]    # if not set, set episode start to default start number
+            if ep_range[1] == '':
+                ep_range[1] = default_ep_range.split('-')[1]    # if not set, set episode end to default end number
+
+            ep_start, ep_end = map(float, ep_range)
+        else:
+            specific_eps.append(float(ep_range))        # if it is a number and not range, add it to the list
+
+    return ep_start, ep_end, specific_eps
 
 def downloader(ep_details, dl_config):
     '''
-    download function where Download Client initialization and download happens.
+    Download function where Download Client initialization and download happens.
     Accepts two dicts: download config, episode details. Returns download status.
     '''
     # load color themes
@@ -263,6 +282,8 @@ if __name__ == '__main__':
         parser.add_argument('-r', '--resolution', type=str, help='resolution to download the episodes')
         parser.add_argument('-d', '--start-download', action='store_true', help='start download immediately or not')
         parser.add_argument('-dc', '--disable-colors', default=False, action='store_true', help='disable colored output')
+        parser.add_argument('-hsa', '--hls-size-accuracy', default=0, type=int, choices=range(0, 101), metavar='[0-100]',
+                            help='accuracy to display the file size of hls files. Use 0 to disable. Please enable only if required as it is slow')
         parser.add_argument('-u', '--update', default=False, action='store_true', help='update UDB to the latest version available')
 
         args = parser.parse_args()
@@ -276,6 +297,7 @@ if __name__ == '__main__':
         # convert bool to y/n
         start_download_predef = 'y' if args.start_download else None
         disable_colors = args.disable_colors
+        hls_size_accuracy = args.hls_size_accuracy
         update_flag = args.update
 
         # initialize color printer
@@ -352,12 +374,12 @@ if __name__ == '__main__':
         client.show_episode_results(episodes, episodes_predef)
 
         # get user input for episodes range and parse start and end number
-        ep_start, ep_end = get_ep_range(f"{episodes[0]['episode']}-{episodes[-1]['episode']}", 'Enter', episodes_predef)
+        ep_start, ep_end, specific_eps = get_ep_range(f"{episodes[0]['episode']}-{episodes[-1]['episode']}", 'Enter', episodes_predef)
 
         # filter required episode links and print
-        logger.info(f'Fetching episodes between {ep_start = } and {ep_end = }')
+        logger.info(f'Fetching episodes between {ep_start = } and {ep_end = } & specific episodes = {specific_eps}')
         colprint('header', "\nFetching Episodes & Available Resolutions:")
-        target_ep_links = client.fetch_episode_links(episodes, ep_start, ep_end)
+        target_ep_links = client.fetch_episode_links(episodes, ep_start, ep_end, specific_eps)
         logger.debug(f'Fetched episodes: {target_ep_links}')
 
         if len(target_ep_links) == 0:
@@ -423,9 +445,9 @@ if __name__ == '__main__':
             pass
         elif proceed == 'e':
             # option for user to edit his choices. hidden option for dev ;)
-            new_ep_start, new_ep_end = get_ep_range(f"{ep_start}-{ep_end}", 'Edit')
+            new_ep_start, new_ep_end, new_specific_eps = get_ep_range(f"{ep_start}-{ep_end}", 'Edit')
             # filter target download links based on new range
-            target_dl_links = { k:v for k,v in target_dl_links.items() if k >= new_ep_start and k <= new_ep_end }
+            target_dl_links = { k:v for k,v in target_dl_links.items() if (k >= new_ep_start and k <= new_ep_end) or k in new_specific_eps }
             logger.debug(f'Edited {target_dl_links = }')
             colprint('yellow', f'Proceeding to download as per edited range [{new_ep_start} - {new_ep_end}]...')
         else:

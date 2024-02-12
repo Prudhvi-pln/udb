@@ -21,7 +21,6 @@ class AnimePaheClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
-        super().__init__(config['request_timeout'], session)
         self.base_url = config['base_url']
         self.search_url = self.base_url + config['search_url']
         self.episodes_list_url = self.base_url + config['episodes_list_url']
@@ -29,6 +28,8 @@ class AnimePaheClient(BaseClient):
         self.episode_url = self.base_url + config['episode_url']
         self.anime_id = ''      # anime id. required to create referer link
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
+        self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
+        super().__init__(config['request_timeout'], session)
         self.logger.debug(f'AnimePahe client initialized with {config = }')
 
     # step-1.1
@@ -291,7 +292,7 @@ class AnimePaheClient(BaseClient):
                 self._colprint('results', f"Episode: {self._safe_type_cast(item.get('episode'))} | Audio: {item.get('audio')} | Duration: {item.get('duration')} | Release date: {item.get('created_at')}")
 
     # step-4
-    def fetch_episode_links(self, episodes, ep_start, ep_end):
+    def fetch_episode_links(self, episodes, ep_start, ep_end, specific_eps):
         '''
         fetch only required episodes based on episode range provided
         '''
@@ -299,7 +300,7 @@ class AnimePaheClient(BaseClient):
         for episode in episodes:
             # self.logger.debug(f'Current {episode = }')
 
-            if float(episode.get('episode')) >= ep_start and float(episode.get('episode')) <= ep_end:
+            if (float(episode.get('episode')) >= ep_start and float(episode.get('episode')) <= ep_end) or (float(episode.get('episode')) in specific_eps):
                 self.logger.debug(f'Processing {episode = }')
                 episode_link = self.episode_url.replace('_anime_id_', self.anime_id).replace('_episode_id_', episode.get('session'))
 

@@ -157,12 +157,18 @@ def threaded(max_parallel=None, thread_name_prefix='udb-', print_status=False):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
+            # If first argument is 'self' keyword, value will be like <xxx object at xxx>, then it is called from a class
+            called_from_class = True if str(args[0]).startswith('<') and str(args[0]).endswith('>') and 'object at' in str(args[0]) else False
             final_status = []
             results = {}
             # Using a with statement to ensure threads are cleaned up promptly
             with ThreadPoolExecutor(max_workers=max_parallel, thread_name_prefix=thread_name_prefix) as executor:
 
-                futures = { executor.submit(func, i, *args[1:], **kwargs): idx for idx, i in enumerate(args[0]) }
+                if called_from_class:
+                    # If caller is a class, need to provide first argument (i.e., self) separately
+                    futures = { executor.submit(func, args[0], i, *args[2:], **kwargs): idx for idx, i in enumerate(args[1]) }
+                else:
+                    futures = { executor.submit(func, i, *args[1:], **kwargs): idx for idx, i in enumerate(args[0]) }
 
                 for future in as_completed(futures):
                     i = futures[future]

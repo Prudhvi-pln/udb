@@ -10,6 +10,8 @@ It is a weekend and you found a good anime to binge-watch. But the effort of dow
 
 The UDB is a fantastic tool designed for all the anime and drama lovers out there. With just a few clicks in the command line, you can effortlessly download entire anime series or drama shows, saving you the hassle of manually downloading each episode one by one.
 
+![udb demo](images/udb-demo.gif)
+
 ## Features
 
 - **Batch Download:** Download complete anime series or drama shows with a single command.
@@ -18,6 +20,7 @@ The UDB is a fantastic tool designed for all the anime and drama lovers out ther
 - **Quality Selection:** Select the video quality that suits your needs.
 - **Auto-Retry:** If a download fails, the downloader automatically retries until successful.
 - **Informative Progress Bar:** Track the progress of your downloads with a visually appealing progress bar.
+- **Command Line Interface (CLI) Automation:** UDB provides robust support for CLI arguments, facilitating seamless automation of tasks.
 
 ## Supported OS
 - Windows
@@ -59,7 +62,7 @@ To use the UDB, make sure you have the following requirements met:
     ```
     pip install -r requirements.txt
     ```
-5. Edit the configuration in your favourite editor:
+4. Edit the configuration in your favourite editor: __Make sure to set the download path__
 
     ```
     vi config.yaml
@@ -79,11 +82,13 @@ UDB is super easy to use. Follow these steps:
 2. Navigate to the project directory.
 3. Run the following command:
 
-  ```
-  python udb.py
-  ```
+   ```
+   python udb.py
+   ```
 
 4. Sit back, relax, and let the magic happen! The downloader will guide you through the process and download your selected anime or drama series.
+
+5. Run `python udb.py -h` for more information about the cli arguments
 
 ## Contributing
 

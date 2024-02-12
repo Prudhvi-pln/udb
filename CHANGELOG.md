@@ -1,4 +1,9 @@
 ## Changelog
+ - Version 2.11.3 [2024-02-11]
+   - Feature: Select specific episodes in addition to a range of episodes. Examples of valid inputs: 1,3,5 | 1-4,6 | 5 | 1-5 | 1- | -3
+   - Added License & Updated Readme (with UDB demo)
+   - Fix minor bug in DramaClient
+
  - Version 2.11.2 [2024-01-28]
    - Implemented Feature #8: Support for GogoAnime.
    - The UDB interface is now vibrant with colors. Explore the enhanced cli visual experience!

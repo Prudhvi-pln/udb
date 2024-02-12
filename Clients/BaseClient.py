@@ -9,11 +9,11 @@ from requests.adapters import HTTPAdapter
 from urllib.parse import parse_qs, urlparse
 from urllib3.util.retry import Retry
 
-# modules for encryption used in Drama
+# modules for encryption
 import base64
 from Cryptodome.Cipher import AES
 
-from Utils.commons import colprint, exec_os_cmd, pretty_time, retry
+from Utils.commons import colprint, exec_os_cmd, pretty_time, retry, threaded
 
 
 class BaseClient():
@@ -23,9 +23,12 @@ class BaseClient():
     def __init__(self, request_timeout=30, session=None):
         # create a requests session and use across to re-use cookies
         self.req_session = session if session else requests.Session()
-        # self.req_session = session if session else cs.create_scraper()
         self.request_timeout = request_timeout
-        # add retries with backoff
+        try:
+            self.hls_size_accuracy
+        except AttributeError:
+            self.hls_size_accuracy = 0      # set default value if not set
+        # add retries with backoff. If you add retry decorator, it'll be more retries
         retry = Retry(total=3, backoff_factor=0.1)
         adapter = HTTPAdapter(max_retries=retry)
         self.req_session.mount('http://', adapter)
@@ -159,7 +162,7 @@ class BaseClient():
                 'duration': duration
             }
             # get approx download size and add file size if available
-            file_size = self._get_download_size(m3u8_link, quality='approx')
+            file_size = self._get_download_size(m3u8_link)
             if file_size: m3u8_links[_res.replace('p','')].update({'filesize': file_size})
 
         if len(m3u8_links) == 0:
@@ -174,7 +177,7 @@ class BaseClient():
                     'duration': duration
                 }
                 # get approx download size and add file size if available
-                file_size = self._get_download_size(m3u8_link, quality='approx')
+                file_size = self._get_download_size(master_m3u8_link)
                 if file_size: m3u8_links['1080'].update({'filesize': file_size})
 
         return m3u8_links
@@ -207,32 +210,48 @@ class BaseClient():
 
         return round(duration), size
 
+    @threaded()
+    def _fetch_content_length(self, url):
+        try:
+            content_len = float(requests.get(url).headers.get('content-length', 0))
+        except Exception as e:
+            self.logger.warning(f'Failed to fetch video content length for {url = }. Error: {e}')
+            content_len = 0
+
+        return content_len
+
     # step-4.2.1.2
-    def _get_download_size(self, m3u8_link, quality='approx'):
+    def _get_download_size(self, m3u8_link):
         '''
         return the download file size (in MB) of a HLS stream based on estimation quality.
         '''
-        # Note: current implementation is only for 'approx' quality.
-        # 'exact' quality requires to iterate through all segments in HLS which is not advisable.
-        # disabling this due to inaccuracy
-        return None
         try:
-            self.logger.debug(f'Calculating {quality} download size for {m3u8_link = }')
+            if self.hls_size_accuracy == 0:     # this parameter should be defined in respective client initialization
+                return None                     # do nothing if disabled
+            self.logger.debug(f'Calculating download size for {m3u8_link = }')
             m3u8_data = self._send_request(m3u8_link)
             # extract ts segment urls. same as in HLS downloader
             base_url = '/'.join(m3u8_link.split('/')[:-1])
             normalize_url = lambda url, base_url: (url if url.startswith('http') else f'{base_url}/{url}')
             urls = [ normalize_url(url.group(0), base_url) for url in re.finditer("^(?!#).+$", m3u8_data, re.MULTILINE) ]
+
             # Logic for 'approx' quality: find content size of a few segments and multiply the average with number of segments
-            url_set = [urls[0], urls[len(urls)//2], urls[-1]] if quality == 'approx' else urls
-            # calculate average content length
-            content_lens = []
-            for url in url_set:
-                content_lens.append(float(self._send_request(url, return_type='raw').headers.get('content-length', 0)))
-            avg_content_len = sum(content_lens) / len(content_lens)
-            dl_size = avg_content_len * len(urls)       # total approx file size in bytes
-            dl_size = round(dl_size / (1024**2))        # bytes to MB
-            self.logger.indebugfo(f'{quality.capitalize()} download size is {dl_size} MB')
+            tgt_len = len(urls) * self.hls_size_accuracy // 100
+            url_set = urls[:tgt_len]
+            # define correction factor to adjust the estimated size
+            cf = 0.85 if self.hls_size_accuracy < 95 else 0.9
+            self.logger.debug(f'Segments considered based on accuracy of {self.hls_size_accuracy}% is {tgt_len}/{len(urls)}. Correction factor: {cf}')
+            content_lens = self._fetch_content_length(url_set)
+
+            # calculate total file size in bytes
+            if self.hls_size_accuracy == 100:
+                dl_size = sum(content_lens) * cf   # cf is required as video compresses after converting to mp4
+            else:
+                avg_content_len = sum(content_lens) / len(content_lens)
+                dl_size = avg_content_len * len(urls) * cf
+
+            dl_size = round(dl_size / (1024**2))         # bytes to MB
+            self.logger.debug(f'Download size is {dl_size} MB')
 
         except Exception as e:
             self.logger.warning(f'Failed to fetch download size for {m3u8_link = }. Error: {e}')
