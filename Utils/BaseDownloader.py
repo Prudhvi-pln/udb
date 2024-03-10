@@ -91,9 +91,9 @@ class BaseDownloader():
         try:
             ep_no = self.out_file.split()[-3]
             try:
-                ep_no = f'Epsiode-{int(ep_no):02d}'
+                ep_no = f'Episode-{int(ep_no):02d}'
             except ValueError as ve:
-                ep_no = f'Movie' if ep_no.lower() == 'movie' else f'Epsiode-{ep_no}'
+                ep_no = f'Movie' if ep_no.lower() == 'movie' else f'Episode-{ep_no}'
         except:
             ep_no = f'Movie'
 

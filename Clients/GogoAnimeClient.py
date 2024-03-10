@@ -220,7 +220,7 @@ class GogoAnimeClient(BaseClient):
 
         for ep, link in target_links.items():
             error = None
-            self.logger.debug(f'Epsiode: {ep}, Link: {link}')
+            self.logger.debug(f'Episode: {ep}, Link: {link}')
             info = f'Episode: {self._safe_type_cast(ep)} |'
 
             # select the resolution based on the selection strategy

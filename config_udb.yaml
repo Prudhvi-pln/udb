@@ -1,7 +1,7 @@
 anime (gogoanime):
   base_url: https://anitaku.to/
   search_url: search.html?keyword=
-  episodes_list_url: https://ajax.gogo-load.com/ajax/load-list-episode?ep_start=_ep_start_&ep_end=_ep_end_&id=
+  episodes_list_url: https://ajax.gogocdn.net/ajax/load-list-episode?ep_start=_ep_start_&ep_end=_ep_end_&id=
   episodes_list_id_element: div.anime_info_body input#movie_id
   search_title_element: ul.items li p.name a
   search_link_element: ul.items li p.name a
