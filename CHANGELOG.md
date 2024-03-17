@@ -1,7 +1,8 @@
 ## Changelog
- - Version 2.11.4 [2024-03-10]
-   - Updated GogoAnime Link in Config
-   - Corrected few typos
+ - Version 2.11.5 [2024-03-17]
+   - Dynamically fetch the cdn url for GogoAnime Client instead of config file.
+   - Updated GogoAnime Link in Config.
+   - Corrected few typos.
 
  - Version 2.11.3 [2024-02-11]
    - Feature: Display download size of stream video files. The accuracy of size estimation can be tuned by setting -hsa [percent]. Disabled by default.

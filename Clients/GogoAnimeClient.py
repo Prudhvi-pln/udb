@@ -34,6 +34,7 @@ class GogoAnimeClient(BaseClient):
         self.ENCRYPTED_URL_ARGS_REGEX = re.compile(rb'data-value="(.+?)"')
         # regex to fetch key & iv for decryption & encrytion. Reference: https://github.com/justfoolingaround/animdl
         self.CRYPT_KEYS_REGEX = re.compile(rb"(?:container|videocontent)-(\d+)")
+        self.CDN_BASE_URL_REGEX = "base_url_cdn_api = '(.*)'"
 
     # step-1.1
     def _get_series_info(self, link):
@@ -57,6 +58,12 @@ class GogoAnimeClient(BaseClient):
 
         # get anime id, which is used later to fetch episodes list
         meta['anime_id'] = soup.select_one(self.episodes_list_id_element)['value']
+
+        # get the load list url dynamically
+        try:
+            meta['base_url_cdn_api'] = re.search(self.CDN_BASE_URL_REGEX, soup.find(string=re.compile(self.CDN_BASE_URL_REGEX))).group(1)
+        except:
+            raise Exception('Failed to find base_url_cdn_api!')
 
         return meta
 
@@ -128,7 +135,7 @@ class GogoAnimeClient(BaseClient):
         fetch all available episodes list in the selected anime
         '''
         all_episodes_list = []
-        list_episodes_url = self.episodes_list_url.replace('_ep_start_', target['ep_start']).replace('_ep_end_', target['ep_end']) + target['anime_id']
+        list_episodes_url = target['base_url_cdn_api'] + self.episodes_list_url.replace('_ep_start_', target['ep_start']).replace('_ep_end_', target['ep_end']) + target['anime_id']
 
         self.logger.debug(f'Fetching soup to extract episodes from {list_episodes_url = }')
         soup = self._get_bsoup(list_episodes_url)
