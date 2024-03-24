@@ -1,5 +1,6 @@
 ## Changelog
- - Version 2.11.5 [2024-03-17]
+ - Version 2.11.6 [2024-03-24]
+   - Fix update issue - unable to retrieve info from Git
    - Dynamically fetch the cdn url for GogoAnime Client instead of config file.
    - Updated GogoAnime Link in Config.
    - Corrected few typos.

@@ -50,7 +50,7 @@ def check_for_updates(current_version):
     '''
     # get latest version from GitHub
     try:
-        latest_version = requests.get('https://github.com/Prudhvi-pln/udb/blob/main/Utils/version.txt').json()['payload']['blob']['rawLines'][0]
+        latest_version = requests.get('https://github.com/Prudhvi-pln/udb/blob/main/Utils/version.txt', headers={'accept': 'application/json'}).json()['payload']['blob']['rawLines'][0]
     except Exception as e:
         return (2, f'ERROR: Unable to retrieve latest version information from Git')
 
