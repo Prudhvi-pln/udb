@@ -1,6 +1,6 @@
 # UDB [Ultimate-Download-Bot]
 
-Welcome to the UDB, the Ultimate-Download-Bot for Anime and Drama! 🎉
+Welcome to the UDB, the Ultimate-Download-Bot for Anime, Drama, Movies & TV Shows! 🎉
 
 ## Insipiration
 
@@ -8,19 +8,20 @@ It is a weekend and you found a good anime to binge-watch. But the effort of dow
 
 ## Overview
 
-The UDB is a fantastic tool designed for all the anime and drama lovers out there. With just a few clicks in the command line, you can effortlessly download entire anime series or drama shows, saving you the hassle of manually downloading each episode one by one.
+The UDB is a fantastic tool designed for all the anime, drama, series lovers out there. With just a few clicks in the command line, you can effortlessly download entire series, saving you the hassle of manually downloading each episode one by one.
 
 ![udb demo](images/udb-demo.gif)
 
 ## Features
 
-- **Batch Download:** Download complete anime series or drama shows with a single command.
+- **Batch Download:** Download complete anime series or drama shows or TV shows with a single command.
 - **Fast and Efficient:** The downloader is optimized for speed, allowing you to grab your favorite episodes in no time.
 - **Customizable Options:** Choose specific seasons, episodes, or ranges to download according to your preferences.
 - **Quality Selection:** Select the video quality that suits your needs.
 - **Auto-Retry:** If a download fails, the downloader automatically retries until successful.
 - **Informative Progress Bar:** Track the progress of your downloads with a visually appealing progress bar.
 - **Command Line Interface (CLI) Automation:** UDB provides robust support for CLI arguments, facilitating seamless automation of tasks.
+- **High-speed Downloader:** Optimized to offer best download experience.
 
 ## Supported OS
 - Windows
@@ -68,7 +69,7 @@ To use the UDB, make sure you have the following requirements met:
     vi config.yaml
     ```
 
-5. You're all set! Start downloading your favorite anime or drama by running:
+5. You're all set! Start downloading your favorite series by running:
 
     ```
     python udb.py
@@ -86,7 +87,7 @@ UDB is super easy to use. Follow these steps:
    python udb.py
    ```
 
-4. Sit back, relax, and let the magic happen! The downloader will guide you through the process and download your selected anime or drama series.
+4. Sit back, relax, and let the magic happen! The downloader will guide you through the process and download your selected series/movie.
 
 5. Run `python udb.py -h` for more information about the cli arguments
 
@@ -97,6 +98,10 @@ I welcome contributions from fellow anime and drama enthusiasts like you! If you
 ## Acknowledgements
 
 I would like to express my gratitude to the creators and developers of the open-source libraries and tools used in this project. Without their contributions, this downloader would not be possible.
+ - [animdl](https://github.com/justfoolingaround/animdl)
+ - [dra-cla](https://github.com/CoolnsX/dra-cla/blob/main/dra-cla)
+ - [vidsrc-to-resolver](https://github.com/Ciarands/vidsrc-to-resolver)
+ - [m3u8downloader](https://github.com/josephcappadona/m3u8downloader)
 
 ## Known issues
  - Progress bar printing duplicate lines for same file
@@ -104,4 +109,4 @@ I would like to express my gratitude to the creators and developers of the open-
 
 ---
 
-Start binge-watching your favorite anime and drama series like never before! Happy downloading! 🍿✨
+Start binge-watching your favorite movies / series like never before! Happy downloading! 🍿✨

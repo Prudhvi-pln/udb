@@ -26,10 +26,14 @@ def get_client():
             logger.debug('Creating Anime Client for GogoAnime site')
             from Clients.GogoAnimeClient import GogoAnimeClient
             return GogoAnimeClient(config[series_type])
-    else:
+    elif 'drama' in series_type.lower():
         logger.debug('Creating Drama Client')
         from Clients.DramaClient import DramaClient
         return DramaClient(config[series_type])
+    else:
+        logger.debug('Creating Movies/TV-Shows Client')
+        from Clients.VidSrcClient import VidSrcClient
+        return VidSrcClient(config[series_type])
 
 def get_os_safe_path(tmp_path):
     '''Returns OS corrected path'''
@@ -63,7 +67,7 @@ def get_series_type(keys, predefined_input=None):
     colprint('header', '\nSelect type of series:')
     for idx, typ in enumerate(keys):
         if typ not in ['DownloaderConfig', 'LoggerConfig']:
-            colprint('results', f'{idx+1}: {typ.capitalize()}')
+            colprint('results', f'{idx+1}: {typ}')
             types[idx+1] = typ
 
     if predefined_input:
@@ -144,22 +148,22 @@ def get_resolutions(items):
     for item in items:
         yield [ i for i in item.keys() if i not in ('error', 'original') ]
 
-def get_ep_range(default_ep_range, mode='Enter', _episodes_predef=None):
+def get_ep_range(default_ep_range, mode='Enter', _episodes_predef=None, type='episodes'):
     '''
-    Get the episode range from user input.
-    Returns tuple of episode range start, episode range end, list of specific episodes.
+    Get the seasons/episodes range from user input.
+    Returns dict of start:float, end:float, specific_no:list.
     '''
     if _episodes_predef:
-        colprint('predefined', f'\nUsing Predefined Input for episodes to download: {_episodes_predef}')
+        colprint('predefined', f'\nUsing Predefined Input for {type} to download: {_episodes_predef}')
         ep_user_input = _episodes_predef
     else:
-        ep_user_input = colprint('user_input', f"\n{mode} episodes to download (ex: 1-16) [default={default_ep_range}]: ") or "all"
+        ep_user_input = colprint('user_input', f"\n{mode} {type} to download (ex: 1-16) [default={default_ep_range}]: ") or "all"
         if str(ep_user_input).lower() == 'all':
             ep_user_input = default_ep_range
 
-    logger.debug(f'Selected episode range ({mode = }): {ep_user_input = }')
+    logger.debug(f'Selected {type} range ({mode = }): {ep_user_input = }')
 
-    # keep track of episode ranges in input
+    # keep track of user input ranges
     if ep_user_input.count('-') > 1:
         logger.error('Invalid input! You must specify only one range.')
         return get_ep_range(default_ep_range, mode, _episodes_predef)
@@ -169,15 +173,41 @@ def get_ep_range(default_ep_range, mode='Enter', _episodes_predef=None):
         if '-' in ep_range:                             # process the range if '-' is found
             ep_range = ep_range.split('-')
             if ep_range[0] == '':
-                ep_range[0] = default_ep_range.split('-')[0]    # if not set, set episode start to default start number
+                ep_range[0] = default_ep_range.split('-')[0]    # set start to default start number, if not set
             if ep_range[1] == '':
-                ep_range[1] = default_ep_range.split('-')[1]    # if not set, set episode end to default end number
+                ep_range[1] = default_ep_range.split('-')[1]    # set end to default end number, if not set
 
             ep_start, ep_end = map(float, ep_range)
         else:
             specific_eps.append(float(ep_range))        # if it is a number and not range, add it to the list
 
-    return ep_start, ep_end, specific_eps
+    return {'start': ep_start, 'end': ep_end, 'specific_no': specific_eps}
+
+def get_ep_range_multiple(season_ep_ranges):
+    '''
+    Get episode ranges per season
+    '''
+    selected_seasons = get_ep_range(f"{episodes[0]['season']}-{episodes[-1]['season']}", 'Enter', seasons_predef, type='seasons')
+    logger.debug(f'Selected seasons: {selected_seasons}')
+    # filter out selected seasons only if available
+    selected_seasons = { k:v for k,v in season_ep_ranges.items() if (k >= selected_seasons['start'] and k <= selected_seasons['end']) or k in selected_seasons['specific_no'] }
+    logger.debug(f'Selected seasons filtered: {selected_seasons}')
+    if episodes_predef:
+        dl_entire_season = 'n'
+    else:
+        dl_entire_season = colprint('user_input', f"\nDownload entire season(s) (y|n)? ").lower() or 'y'
+
+    # return entire season range
+    if dl_entire_season == 'y':
+        return selected_seasons
+
+    # get user input for episode ranges per season
+    selected_eps = {}
+    for k, v in selected_seasons.items():
+        selected_eps_per_season = get_ep_range(f"{v['start']}-{v['end']}", f'Enter Season-{k}', episodes_predef)
+        selected_eps[k] = selected_eps_per_season
+
+    return selected_eps
 
 def downloader(ep_details, dl_config):
     '''
@@ -199,21 +229,24 @@ def downloader(ep_details, dl_config):
     if 'downloadLink' not in ep_details:
         return f'{error_clr}[{start}] Download skipped for {out_file}, due to error: {ep_details.get("error", "Unknown")}{reset_clr}'
 
-    download_link = ep_details['downloadLink']
     download_type = ep_details['downloadType']
-    referer = ep_details['refererLink']
+    # set output directory based on series type
+    if ep_details.get('type', '') == 'tv':
+        dl_config['download_dir'] = f"{dl_config['download_dir']}{os.sep}Season-{ep_details['season']}"     # add extra folder for season
     out_dir = dl_config['download_dir']
 
     # create download client for the episode based on type
+    logger.debug(f'creating download client with {ep_details = }, {dl_config = }')
+
     if download_type == 'hls':
         logger.debug(f'Creating HLS download client for {out_file}')
         from Utils.HLSDownloader import HLSDownloader
-        dlClient = HLSDownloader(dl_config, referer, out_file)
+        dlClient = HLSDownloader(dl_config, ep_details)
 
     elif download_type == 'mp4':
         logger.debug(f'Creating MP4 download client for {out_file}')
         from Utils.BaseDownloader import BaseDownloader
-        dlClient = BaseDownloader(dl_config, referer, out_file)
+        dlClient = BaseDownloader(dl_config, ep_details)
 
     else:
         return f'{error_clr}[{start}] Download skipped for {out_file}, due to unknown download type [{download_type}]{reset_clr}'
@@ -226,7 +259,7 @@ def downloader(ep_details, dl_config):
     else:
         try:
             # main function where HLS download happens
-            status, msg = dlClient.start_download(download_link)
+            status, msg = dlClient.start_download(ep_details['downloadLink'])
         except Exception as e:
             status, msg = 1, str(e)
 
@@ -278,6 +311,7 @@ if __name__ == '__main__':
         parser.add_argument('-s', '--series-type', type=int, help='type of series')
         parser.add_argument('-n', '--series-name', help='name of the series to search')
         parser.add_argument('-y', '--series-year', type=int, help='release year of the series')
+        parser.add_argument('-S', '--seasons', action='append', help='seasons number to download (only applicable for TV Shows)')
         parser.add_argument('-e', '--episodes', action='append', help='episodes number to download')
         parser.add_argument('-r', '--resolution', type=str, help='resolution to download the episodes')
         parser.add_argument('-d', '--start-download', action='store_true', help='start download immediately or not')
@@ -292,6 +326,7 @@ if __name__ == '__main__':
         series_type_predef = args.series_type
         series_name_predef = args.series_name
         series_year_predef = args.series_year
+        seasons_predef = '-'.join(args.seasons) if args.seasons else None
         episodes_predef = '-'.join(args.episodes) if args.episodes else None
         resolution_predef = args.resolution
         # convert bool to y/n
@@ -371,15 +406,18 @@ if __name__ == '__main__':
             exit(0)
 
         logger.info(f'Displaying episodes list')
-        client.show_episode_results(episodes, episodes_predef)
+        client.show_episode_results(episodes, seasons_predef, episodes_predef)
 
         # get user input for episodes range and parse start and end number
-        ep_start, ep_end, specific_eps = get_ep_range(f"{episodes[0]['episode']}-{episodes[-1]['episode']}", 'Enter', episodes_predef)
+        if episodes[0].get('type') == 'tv':
+            selected_eps = get_ep_range_multiple(client.get_season_ep_ranges(episodes))
+        else:
+            selected_eps = get_ep_range(f"{episodes[0]['episode']}-{episodes[-1]['episode']}", 'Enter', episodes_predef)
 
         # filter required episode links and print
-        logger.info(f'Fetching episodes between {ep_start = } and {ep_end = } & specific episodes = {specific_eps}')
+        logger.info(f'Fetching episodes based on {selected_eps = }')
         colprint('header', "\nFetching Episodes & Available Resolutions:")
-        target_ep_links = client.fetch_episode_links(episodes, ep_start, ep_end, specific_eps)
+        target_ep_links = client.fetch_episode_links(episodes, selected_eps)
         logger.debug(f'Fetched episodes: {target_ep_links}')
 
         if len(target_ep_links) == 0:
@@ -445,9 +483,10 @@ if __name__ == '__main__':
             pass
         elif proceed == 'e':
             # option for user to edit his choices. hidden option for dev ;)
-            new_ep_start, new_ep_end, new_specific_eps = get_ep_range(f"{ep_start}-{ep_end}", 'Edit')
+            new_selected_eps = get_ep_range(f"{selected_eps['start']}-{selected_eps['end']}", 'Edit')
+            new_ep_start, new_ep_end = new_selected_eps['start'], new_selected_eps['end']
             # filter target download links based on new range
-            target_dl_links = { k:v for k,v in target_dl_links.items() if (k >= new_ep_start and k <= new_ep_end) or k in new_specific_eps }
+            target_dl_links = { k:v for k,v in target_dl_links.items() if (k >= new_ep_start and k <= new_ep_end) or k in new_selected_eps['specific_no'] }
             logger.debug(f'Edited {target_dl_links = }')
             colprint('yellow', f'Proceeding to download as per edited range [{new_ep_start} - {new_ep_end}]...')
         else:

@@ -12,9 +12,9 @@ class HLSDownloader(BaseDownloader):
     # References: https://github.com/Oshan96/monkey-dl/blob/master/anime_downloader/util/hls_downloader.py
     # https://github.com/josephcappadona/m3u8downloader/blob/master/m3u8downloader/m3u8.py
 
-    def __init__(self, dl_config, referer_link, out_file, session=None):
+    def __init__(self, dl_config, ep_details, session=None):
         # initialize base downloader
-        super().__init__(dl_config, referer_link, out_file, session)
+        super().__init__(dl_config, ep_details, session)
         # initialize HLS specific configuration
         self.m3u8_file = os.path.join(f'{self.temp_dir}', 'uwu.m3u8')
         self.thread_name_prefix = 'udb-m3u8-'
@@ -85,12 +85,23 @@ class HLSDownloader(BaseDownloader):
     def _convert_to_mp4(self):
         # print(f'Converting {self.out_file} to mp4')
         out_file = os.path.join(f'{self.out_dir}', f'{self.out_file}')
-        cmd = f'ffmpeg -loglevel warning -allowed_extensions ALL -i "{self.m3u8_file}" -c copy -bsf:a aac_adtstoasc "{out_file}"'
+        command = [f'ffmpeg -loglevel warning -allowed_extensions ALL -i "{self.m3u8_file}"']
+        maps = ['-map 0']
+        metadata = []
+
+        # Prepare the command if subtitles are present
+        for i, (lang, url) in enumerate(self.subtitles.items(), start=1):
+            command.append(f'-i "{url}"')
+            maps.append(f'-map {i}')
+            metadata.append(f'-metadata:s:s:{i-1} title="{lang}"')
+
+        metadata.append(f'-c:v copy -c:a copy -c:s mov_text -bsf:a aac_adtstoasc "{out_file}"')
+
+        cmd = ' '.join(command + maps + metadata)
         self._exec_cmd(cmd)
 
     def start_download(self, m3u8_link):
         # create output directory
-        self.logger.debug('Creating output directories')
         self._create_out_dirs()
 
         iv = None
@@ -108,10 +119,10 @@ class HLSDownloader(BaseDownloader):
         if iv:
             raise Exception("Current code cannot decode IV links")
 
-        self.logger.debug('Collect .ts segment urls')
+        self.logger.debug('Collect m3u8 segment urls')
         ts_urls = self._collect_ts_urls(m3u8_link, m3u8_data)
 
-        self.logger.debug('Downloading collected .ts segments')
+        self.logger.debug('Downloading collected segments')
         metadata = {
             'type': 'segments',
             'total': len(ts_urls),
@@ -119,10 +130,10 @@ class HLSDownloader(BaseDownloader):
         }
         self._multi_threaded_download(self._download_segment, ts_urls, **metadata)
 
-        self.logger.debug('Rewrite m3u8 file with downloaded .ts segments paths')
+        self.logger.debug('Rewrite m3u8 file with downloaded segments paths')
         self._rewrite_m3u8_file(m3u8_data)
 
-        self.logger.debug('Converting .ts files to .mp4')
+        self.logger.debug('Converting m3u8 segments to .mp4')
         self._convert_to_mp4()
 
         # remove temp dir once completed and dir is empty

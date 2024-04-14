@@ -1,4 +1,9 @@
 ## Changelog
+ - Version 2.12.0 [2024-04-14]
+   - New Feature #11: Support for Movies & TV Shows is finally here.
+   - AnimePahe: Reload saved cookies for faster loading.
+   - Several optimizations under the hood.
+
  - Version 2.11.6 [2024-03-24]
    - Fix update issue - unable to retrieve info from Git
    - Dynamically fetch the cdn url for GogoAnime Client instead of config file.

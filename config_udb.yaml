@@ -1,9 +1,8 @@
-anime (gogoanime):
+Anime (Gogoanime):
   base_url: https://anitaku.to/
   search_url: search.html?keyword=
-  episodes_list_url: ajax/load-list-episode?ep_start=_ep_start_&ep_end=_ep_end_&id=
+  episodes_list_url: ajax/load-list-episode?ep_start={ep_start}&ep_end={ep_end}&id=
   episodes_list_id_element: div.anime_info_body input#movie_id
-  search_title_element: ul.items li p.name a
   search_link_element: ul.items li p.name a
   series_info_element: div.anime_info_body p.type
   episode_list_element: ul#episode_page li a
@@ -13,25 +12,24 @@ anime (gogoanime):
   download_fetch_link: encrypt-ajax.php
   download_dir: D:\Anime
   request_timeout: 30
-  alternate_resolution_selector: 'lowest'    # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
+  alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
   preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
   blacklist_urls:                             # avoid below urls while fetching download links
 
-anime (animepahe):
+Anime (Animepahe):
   base_url: https://animepahe.ru/
   search_url: api?m=search&q=
   episodes_list_url: api?m=release&sort=episode_asc&id=
   download_link_url: api?m=links&p=kwik&id=
-  episode_url: play/_anime_id_/_episode_id_
+  episode_url: play/{anime_id}/{episode_id}
   download_dir: D:\Anime
   request_timeout: 30
-  alternate_resolution_selector: 'lowest'    # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
+  alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
 
-drama:
+Drama (Myasiantv):
   base_url: https://myasiantv.ac/
   search_url: search.html?key=
-  episodes_list_url: ajax/episode-list/_series_name_/_pg_no_.html?page=_pg_no_
-  search_title_element: ul.items li h2 a
+  episodes_list_url: ajax/episode-list/{series_name}/{pg_no}.html?page={pg_no}
   search_link_element: ul.items li h2 a
   series_info_element: div.left p
   episode_link_element: ul.list-episode li h2 a
@@ -45,6 +43,26 @@ drama:
   - https://fast
   - https://hls
   - https://ttcx
+  blacklist_urls:                             # avoid below urls while fetching download links
+
+Movies & TV Shows:
+  base_url: https://www.themoviedb.org/
+  search_url: search?query=
+  search_link_element: .details a.result
+  series_info_element: section.facts p
+  episodes_list_element: .episodes
+  Vidsrc:
+    base_url: https://vidsrc.to/
+    episodes_list_url: embed/{type}/{imdb_id}
+    sources_url: ajax/embed/episode/{episode_id}/sources
+    vidplay_source_url: ajax/embed/source/{vidplay_id}
+  Vidplay:
+    base_url: https://vidplay.online
+    keys_url: https://github.com/Ciarands/vidsrc-keys/blob/main/keys.json
+  download_dir: C:\Users\HP\Downloads\Video
+  request_timeout: 30
+  alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
+  preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
   blacklist_urls:                             # avoid below urls while fetching download links
 
 DownloaderConfig:

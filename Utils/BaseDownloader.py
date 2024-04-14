@@ -17,17 +17,19 @@ class BaseDownloader():
     '''
     Download Client for downloading files directly using requests
     '''
-    def __init__(self, dl_config, referer_link, out_file, session=None):
+    def __init__(self, dl_config, ep_details, session=None):
         # logger init
         self.logger = logging.getLogger()
         # set downloader configuration
+        self.out_file = ep_details['episodeName']
         self.out_dir = dl_config['download_dir']
         self.concurrency = dl_config['concurrency_per_file'] if dl_config['concurrency_per_file'] != 'auto' else None
         self.parent_temp_dir = dl_config['temp_download_dir'] if dl_config['temp_download_dir'] != 'auto' else os.path.join(f'{self.out_dir}', 'temp_dir')
-        self.temp_dir = os.path.join(f"{self.parent_temp_dir}", f"{out_file.replace('.mp4','')}") #create temp directory per episode
+        self.temp_dir = os.path.join(f"{self.parent_temp_dir}", f"{self.out_file.replace('.mp4','')}") #create temp directory per episode
         self.request_timeout = dl_config['request_timeout']
-        self.referer = referer_link
-        self.out_file = out_file
+        self.series_type = ep_details.get('type', 'series')
+        self.subtitles = ep_details.get('subtitles', {})
+        self.referer = ep_details['refererLink']
         self.thread_name_prefix = 'udb-mp4-'
 
         # create a requests session and use across to re-use cookies
@@ -73,6 +75,7 @@ class BaseDownloader():
         return response.text if to_text else response.content
 
     def _create_out_dirs(self):
+        self.logger.debug(f'Creating outout directories: {self.out_dir}')
         os.makedirs(self.out_dir, exist_ok=True)
         os.makedirs(self.temp_dir, exist_ok=True)
 
@@ -84,20 +87,31 @@ class BaseDownloader():
         if len(os.listdir(self.out_dir)) == 0: os.rmdir(self.out_dir)
 
     def _exec_cmd(self, cmd):
+        self.logger.debug(f'Executing system command: {cmd}')
         return exec_os_cmd(cmd)
 
-    def _get_shortened_ep_name(self):
+    def _get_display_prefix(self):
         # shorten the name to show only ep number
         try:
-            ep_no = self.out_file.split()[-3]
-            try:
-                ep_no = f'Episode-{int(ep_no):02d}'
-            except ValueError as ve:
-                ep_no = f'Movie' if ep_no.lower() == 'movie' else f'Episode-{ep_no}'
-        except:
-            ep_no = f'Movie'
+            # set display prefix based on series type if defined
+            if self.series_type == 'tv':
+                ss_no = self.out_dir.split('-')[-1]
+                ep_no = self.out_file.split()[1]
+                return f'S{int(ss_no):02d}E{int(ep_no):02d}'
+            elif self.series_type == 'movie':
+                return 'Movie'
 
-        return ep_no
+            ep_no = self.out_file.split()[-3]
+
+            try:
+                display_prefix = f'Episode-{int(ep_no):02d}'
+            except ValueError as ve:
+                display_prefix = f'Movie' if ep_no.lower() == 'movie' else f'Episode-{ep_no}'
+
+        except:
+            display_prefix = 'Movie'
+
+        return display_prefix
 
     def _create_chunk_header(self, start):
         end = start + self.chunk_size - 1
@@ -136,7 +150,7 @@ class BaseDownloader():
     def _multi_threaded_download(self, download_func, urls, **metadata):
         reused_segments = 0
         failed_segments = 0
-        ep_no = self._get_shortened_ep_name()
+        ep_no = self._get_display_prefix()
         type = metadata.pop('type')
         self.logger.debug(f'[{ep_no}] Downloading {len(urls)} {type} using {self.concurrency} workers...')
 
@@ -192,7 +206,6 @@ class BaseDownloader():
         # set chunk size to 1MiB
         self.chunk_size = 1024*1024
         # create output directory
-        self.logger.debug('Creating output directories')
         self._create_out_dirs()
 
         self.logger.debug('Fetching stream data')

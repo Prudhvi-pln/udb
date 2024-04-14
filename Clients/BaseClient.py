@@ -67,18 +67,22 @@ class BaseClient():
             colprint(theme, text, **kwargs)
 
     @retry()
-    def _send_request(self, url, referer=None, extra_headers=None, cookies={}, return_type='text'):
+    def _send_request(self, url, referer=None, extra_headers=None, cookies={}, return_type='text', silent=False):
         '''
         call response session and return response
-        Argument: return_type - valid options are text/json/bytes/raw
+
+        Argument:
+        - return_type - valid options are text/json/bytes/raw
+        - silent: boolean - suppress logging errors
         '''
         # print(f'{self.req_session}: {url}')
         header = self.header
         if referer: header.update({'referer': referer})
+        if return_type.lower() == 'json': header.update({'accept': 'application/json'})
         if extra_headers: header.update(extra_headers)
-        if return_type.lower() == 'json': header.update({'accept': 'application/json, text/javascript'})
         response = self.req_session.get(url, timeout=self.request_timeout, headers=header, cookies=cookies, verify=False)
         # print(response)
+
         if response.status_code == 200:
             if return_type.lower() == 'text':
                 return response.text
@@ -88,16 +92,26 @@ class BaseClient():
                 return response.json()
             elif return_type.lower() == 'raw':
                 return response
-        else:
-            self.logger.error(f'Failed with response code: {response.status_code}')
 
-    def _get_bsoup(self, search_url, referer=None, extra_headers=None, cookies={}):
+        elif str(response.status_code).startswith('5'):     # retry if status code is 5xx
+            msg = f'Failed with code: {response.status_code}'
+            self.logger.warning(msg)
+            raise Exception(msg)
+
+        else:
+            msg = f'Failed with code: {response.status_code}'
+            if silent:
+                self.logger.warning(f'[Suppressed error] {msg}')
+            else:       # display error message onto console and log
+                self.logger.error(msg)
+
+    def _get_bsoup(self, search_url, referer=None, extra_headers=None, cookies={}, silent=False):
         '''
         return html parsed soup
         '''
-        html_content = self._send_request(search_url, referer, extra_headers, cookies, 'text')
-
-        return BS(html_content, 'html.parser')
+        html_content = self._send_request(search_url, referer, extra_headers, cookies, 'text', silent)
+        if html_content is not None:
+            return BS(html_content, 'html.parser')
 
     def _exec_cmd(self, cmd):
         return exec_os_cmd(cmd)
@@ -131,7 +145,7 @@ class BaseClient():
                     stream_link = 'https:' + stream_link
                 return stream_link
 
-    # step-4.2.1 -- used in GogoAnime, MyAsianTV
+    # step-4.2.2.1 -- used in GogoAnime, MyAsianTV
     def _parse_m3u8_links(self, master_m3u8_link, referer):
         '''
         parse master m3u8 data and return dict of resolutions and m3u8 links
@@ -144,9 +158,12 @@ class BaseClient():
 
         _regex_list = lambda data, rgx, grp: [ url.group(grp) for url in re.finditer(rgx, data) ]
         _full_link = lambda link: link if link.startswith('http') else base_url + '/' + link
-        resolutions = _regex_list(master_m3u8_data, 'RESOLUTION=(.*),', 1)
+        resolutions = _regex_list(master_m3u8_data, 'RESOLUTION=(\d+x\d+)', 1)
         resolution_names = _regex_list(master_m3u8_data, 'NAME="(.*)"', 1)
+        if len(resolution_names) == 0:
+            resolution_names = [ res.lower().split('x')[-1] for res in resolutions ]
         resolution_links = _regex_list(master_m3u8_data, '(.*)m3u8', 0)
+        self.logger.debug(f'Resolutions data: {resolutions = }, {resolution_names = }, {resolution_links = }')
 
         # calculate duration from any resolution, as it is same for all resolutions
         temp_link = _full_link(resolution_links[0]) if resolution_links else master_m3u8_link
@@ -167,6 +184,7 @@ class BaseClient():
 
         if len(m3u8_links) == 0:
             # check for original keyword in the link, or if '#EXT-X-ENDLIST' in m3u8 data
+            self.logger.debug('Child resolutions not found. Checking if master link is original link')
             master_is_child = re.search('#EXT-X-ENDLIST', master_m3u8_data)
             if 'original' in master_m3u8_link or master_is_child:
                 self.logger.debug('master m3u8 link itself is the download link')
@@ -182,7 +200,7 @@ class BaseClient():
 
         return m3u8_links
 
-    # step-4.2.1 / 4.2.1.1 -- used in GogoAnime, MyAsianTV
+    # step-4.2.2.2 -- used in GogoAnime, MyAsianTV
     def _get_video_metadata(self, link, link_type='mp4'):
         '''
         return duration & size of the video using ffprobe command
@@ -220,7 +238,7 @@ class BaseClient():
 
         return content_len
 
-    # step-4.2.1.2
+    # step-4.2.2.1.1
     def _get_download_size(self, m3u8_link):
         '''
         return the download file size (in MB) of a HLS stream based on estimation quality.
@@ -259,11 +277,10 @@ class BaseClient():
 
         return dl_size
 
-    # step-4.2 -- used in GogoAnime, MyAsianTV
-    def _get_download_links(self, **gdl_config):
+    # step-4.2.1 -- used in GogoAnime, MyAsianTV
+    def _get_download_sources(self, **gdl_config):
         '''
-        retrieve download links from stream link and return available resolution links
-        - Sort the resolutions in ascending order
+        extract download link sources
         '''
         self.logger.debug(f'Received get download links config: {gdl_config = }')
 
@@ -271,8 +288,6 @@ class BaseClient():
         link = gdl_config['link']
         encrypted_url_args_regex = gdl_config['encrypted_url_args_regex']
         download_fetch_link = gdl_config['download_fetch_link']
-        preferred_urls = gdl_config['preferred_urls']
-        blacklist_urls = gdl_config['blacklist_urls']
 
         # extract encryption, decryption keys and iv
         stream_page_content = self._send_request(link, return_type='bytes')
@@ -352,6 +367,15 @@ class BaseClient():
         if len(download_links) == 0:
             return {'error': 'No download links found'}
 
+        return download_links
+
+    # step-4.2.2 -- used in GogoAnime, MyAsianTV, VidSrc
+    def _get_download_links(self, download_links, *config_data):
+        '''
+        retrieve download links from stream link and return available resolution links
+        - Sort the resolutions in ascending order
+        '''
+        link, preferred_urls, blacklist_urls = config_data
         # re-order urls based on user preference
         ordered_download_links = [ j for i in preferred_urls for j in download_links if i in j.get('file') ]
         # append remaining urls
@@ -372,6 +396,9 @@ class BaseClient():
             counter += 1
             dlink = download_link.get('file')
             dtype = download_link.get('type', '').strip().lower()
+            # set default download type as HLS if link name ends with m3u8
+            if dtype == '' and dlink.endswith('.m3u8'):
+                dtype = 'hls'
 
             if dtype == 'hls':
                 try:
@@ -419,6 +446,77 @@ class BaseClient():
 
         return resolution_links
 
+    # step-4.3
+    def _show_episode_links(self, key, details):
+        '''
+        pretty print episode links from fetch_episode_links. (this is a default method. override if required)
+        '''
+        info = f"Episode: {self._safe_type_cast(key)}"
+        if 'error' in details:
+            info += f' | {details["error"]}'
+            self.logger.error(info)
+            return
+
+        try:
+            duration = next(iter(details.values())).get("duration", "NA")
+        except:
+            duration = 'NA'
+        info += f' (duration: {duration})'    # get duration from any resolution dict
+
+        for _res, _vals in details.items():
+            info += f' | {_res}P ({_vals["resolution_size"]})' #| URL: {_vals["downloadLink"]}
+            if 'filesize' in _vals: info += f' [~{_vals["filesize"]} MB]'
+
+        self._colprint('results', info)
+
+    # step-6
+    def fetch_m3u8_links(self, target_links, resolution, episode_prefix):
+        '''
+        return dict containing m3u8 links based on resolution. (this is a default method. override if required)
+        '''
+        _get_ep_name = lambda resltn: f"{self.udb_episode_dict.get(ep).get('episodeName')} - {resltn}P.mp4"
+
+        for ep, link in target_links.items():
+            error = None
+            self.logger.debug(f'Episode: {ep}, Link: {link}')
+            info = f'Episode: {self._safe_type_cast(ep)} |'
+
+            # select the resolution based on the selection strategy
+            selected_resolution = self._resolution_selector(link.keys(), resolution, self.selector_strategy)
+            res_dict = link.get(selected_resolution)
+            self.logger.debug(f'{selected_resolution = } based on {self.selector_strategy = }, Data: {res_dict = }')
+
+            if 'error' in link:
+                error = link.get('error')
+
+            elif res_dict is None or len(res_dict) == 0:
+                error = f'Resolution [{resolution}] not found'
+
+            else:
+                info = f'{info} {selected_resolution}P |'
+                try:
+                    ep_name = _get_ep_name(selected_resolution)
+                    ep_link = res_dict['downloadLink']
+                    link_type = res_dict['downloadType']
+
+                    # add download link and it's type against episode
+                    self._update_udb_dict(ep, {'episodeName': ep_name, 'downloadLink': ep_link, 'downloadType': link_type})
+                    self.logger.debug(f'{info} Link found [{ep_link}]')
+                    self._colprint('results', f'{info} Link found [{ep_link}]')
+
+                except Exception as e:
+                    error = f'Failed to fetch link with error [{e}]'
+
+            if error:
+                # add error message and log it
+                ep_name = _get_ep_name(resolution)
+                self._update_udb_dict(ep, {'episodeName': ep_name, 'error': error})
+                self.logger.error(f'{info} {error}')
+
+        final_dict = { k:v for k,v in self._get_udb_dict().items() }
+
+        return final_dict
+
     def _pad(self, s):
         return s + (self.bs - len(s) % self.bs) * chr(self.bs - len(s) % self.bs)
 
@@ -452,7 +550,7 @@ class BaseClient():
 
         return decrypted_msg
 
-    def _get_episode_range_to_show(self, start, end, predefined_range=None, threshold=24):
+    def _get_episode_range_to_show(self, start, end, predefined_range=None, threshold=24, type='episodes'):
         '''
         Get the range of episodes from user and return the range to display
         '''
@@ -464,7 +562,7 @@ class BaseClient():
             # display only required episodes if specified from cli
             show_range = predefined_range
         else:
-            show_range = self._colprint('user_input', f'Enter range to display (ex: 1-16) [default={default_range}]: ') or 'all'
+            show_range = self._colprint('user_input', f'Enter {type} range to display (ex: 1-16) [default={default_range}]: ') or 'all'
             if show_range.lower() == 'all':
                 show_range = default_range
 
@@ -477,6 +575,8 @@ class BaseClient():
 
         if show_range == default_range:
             self._colprint('header', 'Showing all episodes:')
+        elif type != 'episodes':
+            self._colprint('header', f'Showing episodes for {type} [{start} - {end}]:')
         else:
             self._colprint('header', f'Showing episodes from {start} to {end}:')
 
@@ -486,7 +586,7 @@ class BaseClient():
         '''
         Select a resolution based on selection strategy
         '''
-        if 'error' in available_resolutions:
+        if 'error' in available_resolutions or len(available_resolutions) == 0:
             return
 
         if target_resolution in available_resolutions:

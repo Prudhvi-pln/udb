@@ -16,7 +16,6 @@ class DramaClient(BaseClient):
         self.search_url = self.base_url + config['search_url']
         self.episodes_list_url = self.base_url + config['episodes_list_url']
         self.search_link_element = config['search_link_element']
-        self.search_title_element = config['search_title_element']
         self.series_info_element = config['series_info_element']
         self.episode_link_element = config['episode_link_element']
         self.episode_sub_type_element = config['episode_sub_type_element']
@@ -104,29 +103,6 @@ class DramaClient(BaseClient):
 
         return episode_list
 
-    # step-4.3
-    def _show_episode_links(self, key, details):
-        '''
-        pretty print episode links from fetch_episode_links
-        '''
-        info = f"Episode: {self._safe_type_cast(key)}"
-        if 'error' in details:
-            info += f' | {details["error"]}'
-            self.logger.error(info)
-            return
-
-        try:
-            duration = next(iter(details.values())).get("duration", "NA")
-        except:
-            duration = 'NA'
-        info += f' (duration: {duration})'    # get duration from any resolution dict
-
-        for _res, _vals in details.items():
-            info += f' | {_res}P ({_vals["resolution_size"]})' #| URL: {_vals["downloadLink"]}
-            if 'filesize' in _vals: info += f' [~{_vals["filesize"]} MB]'
-
-        self._colprint('results', info)
-
     # step-1
     def search(self, keyword, search_limit=10):
         '''
@@ -137,13 +113,12 @@ class DramaClient(BaseClient):
         search_url = self.search_url + search_key
         soup = self._get_bsoup(search_url)
 
-        # get matched items. Limit the search results to be displayed.
-        search_titles = [ i.text for i in soup.select(self.search_title_element) ][:search_limit]
-        search_links = [ i['href'] for i in soup.select(self.search_link_element) ][:search_limit]
-
         idx = 1
         search_results = {}
-        for title, link in zip(search_titles, search_links):
+        # get matched items. Limit the search results to be displayed.
+        for element in soup.select(self.search_link_element)[:search_limit]:
+            title = element.text
+            link = element['href']
             if link.startswith('/'):
                 link = self.base_url + link
             item = {'title': title, 'link': link}
@@ -176,7 +151,7 @@ class DramaClient(BaseClient):
             if not has_more:
                 raise Exception('Show more element not found')
             pg_no, series = has_more.group(1), has_more.group(2)
-            more_ep_link = self.episodes_list_url.replace('_series_name_', series).replace('_pg_no_', pg_no)
+            more_ep_link = self.episodes_list_url.format(series_name=series, pg_no=pg_no)
 
             self.logger.debug(f'Fetching more episodes for {series = } from {pg_no = }. URL: {more_ep_link}')
             soup = self._get_bsoup(more_ep_link, series_link, {'x-requested-with': 'XMLHttpRequest'})
@@ -185,11 +160,11 @@ class DramaClient(BaseClient):
         return all_episodes_list[::-1]   # return episodes in ascending
 
     # step-3
-    def show_episode_results(self, items, predefined_range):
+    def show_episode_results(self, items, *predefined_range):
         '''
         pretty print episodes list from fetch_episodes_list
         '''
-        start, end = self._get_episode_range_to_show(items[0].get('episode'), items[-1].get('episode'), predefined_range, threshold=24)
+        start, end = self._get_episode_range_to_show(items[0].get('episode'), items[-1].get('episode'), predefined_range[1], threshold=24)
 
         for item in items:
             if item.get('episode') >= start and item.get('episode') <= end:
@@ -197,11 +172,13 @@ class DramaClient(BaseClient):
                 self._colprint('results', f"Episode: {fmted_name} | Subs: {item.get('episodeSubs')} | Release date: {item.get('episodeUploadTime')}")
 
     # step-4
-    def fetch_episode_links(self, episodes, ep_start, ep_end, specific_eps):
+    def fetch_episode_links(self, episodes, ep_ranges):
         '''
         fetch only required episodes based on episode range provided
         '''
         download_links = {}
+        ep_start, ep_end, specific_eps = ep_ranges['start'], ep_ranges['end'], ep_ranges.get('specific_no', [])
+
         for episode in episodes:
             # self.logger.debug(f'Current {episode = }')
 
@@ -224,11 +201,13 @@ class DramaClient(BaseClient):
                         'decryption_key': self.__key,
                         'iv': self.__iv,
                         'encrypted_url_args_regex': self.ENCRYPTED_URL_ARGS_REGEX,
-                        'download_fetch_link': self.download_fetch_link,
-                        'preferred_urls': self.preferred_urls,
-                        'blacklist_urls': self.blacklist_urls
+                        'download_fetch_link': self.download_fetch_link
                     }
-                    m3u8_links = self._get_download_links(**gdl_config)
+                    # get download sources
+                    m3u8_links = self._get_download_sources(**gdl_config)
+                    if 'error' not in m3u8_links:
+                        # get actual download links
+                        m3u8_links = self._get_download_links(m3u8_links, link, self.preferred_urls, self.blacklist_urls)
                     self.logger.debug(f'Extracted {m3u8_links = }')
 
                     download_links[episode.get('episode')] = m3u8_links
@@ -243,51 +222,3 @@ class DramaClient(BaseClient):
         target_dir = drama_title if drama_title.endswith(')') else f"{drama_title} ({target_series['Release year']})"
 
         return target_dir, None
-
-    # step-6
-    def fetch_m3u8_links(self, target_links, resolution, episode_prefix):
-        '''
-        return dict containing m3u8 links based on resolution
-        '''
-        _get_ep_name = lambda resltn: f'{self.udb_episode_dict.get(ep).get("episodeName")} - {resltn}P.mp4'
-
-        for ep, link in target_links.items():
-            error = None
-            self.logger.debug(f'Episode: {ep}, Link: {link}')
-            info = f'Episode: {self._safe_type_cast(ep)} |'
-
-            # select the resolution based on the selection strategy
-            selected_resolution = self._resolution_selector(link.keys(), resolution, self.selector_strategy)
-            res_dict = link.get(selected_resolution)
-            self.logger.debug(f'{selected_resolution = } based on {self.selector_strategy = }, Data: {res_dict = }')
-
-            if 'error' in link:
-                error = link.get('error')
-
-            elif res_dict is None or len(res_dict) == 0:
-                error = f'Resolution [{resolution}] not found'
-
-            else:
-                info = f'{info} {selected_resolution}P |'
-                try:
-                    ep_name = _get_ep_name(selected_resolution)
-                    ep_link = res_dict['downloadLink']
-                    link_type = res_dict['downloadType']
-
-                    # add download link and it's type against episode
-                    self._update_udb_dict(ep, {'episodeName': ep_name, 'downloadLink': ep_link, 'downloadType': link_type})
-                    self.logger.debug(f'{info} Link found [{ep_link}]')
-                    self._colprint('results', f'{info} Link found [{ep_link}]')
-
-                except Exception as e:
-                    error = f'Failed to fetch link with error [{e}]'
-
-            if error:
-                # add error message and log it
-                ep_name = _get_ep_name(resolution)
-                self._update_udb_dict(ep, {'episodeName': ep_name, 'error': error})
-                self.logger.error(f'{info} {error}')
-
-        final_dict = { k:v for k,v in self._get_udb_dict().items() }
-
-        return final_dict
