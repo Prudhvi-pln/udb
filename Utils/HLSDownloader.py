@@ -86,7 +86,7 @@ class HLSDownloader(BaseDownloader):
         # print(f'Converting {self.out_file} to mp4')
         out_file = os.path.join(f'{self.out_dir}', f'{self.out_file}')
         command = [f'ffmpeg -loglevel warning -allowed_extensions ALL -i "{self.m3u8_file}"']
-        maps = ['-map 0']
+        maps = ['-map 0'] if self.subtitles else []
         metadata = []
 
         # Prepare the command if subtitles are present
