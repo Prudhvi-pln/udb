@@ -80,7 +80,9 @@ class BaseClient():
         if referer: header.update({'referer': referer})
         if return_type.lower() == 'json': header.update({'accept': 'application/json'})
         if extra_headers: header.update(extra_headers)
+        # self.logger.debug(f'Cookies before request: {self.req_session.cookies.get_dict()}')
         response = self.req_session.get(url, timeout=self.request_timeout, headers=header, cookies=cookies, verify=False)
+        # self.logger.debug(f'Cookies after request: {self.req_session.cookies.get_dict()}')
         # print(response)
 
         if response.status_code == 200:
@@ -447,11 +449,11 @@ class BaseClient():
         return resolution_links
 
     # step-4.3
-    def _show_episode_links(self, key, details):
+    def _show_episode_links(self, key, details, display_prefix='Episode'):
         '''
         pretty print episode links from fetch_episode_links. (this is a default method. override if required)
         '''
-        info = f"Episode: {self._safe_type_cast(key)}"
+        info = f"{display_prefix}: {self._safe_type_cast(key)}"
         if 'error' in details:
             info += f' | {details["error"]}'
             self.logger.error(info)
@@ -476,10 +478,27 @@ class BaseClient():
         '''
         _get_ep_name = lambda resltn: f"{self.udb_episode_dict.get(ep).get('episodeName')} - {resltn}P.mp4"
 
+        display_prefix = 'Episode'
+        series_flag = True if str(next(iter(target_links.keys()))).startswith('s') else False
+        if series_flag: prev_season = None
+
         for ep, link in target_links.items():
             error = None
-            self.logger.debug(f'Episode: {ep}, Link: {link}')
-            info = f'Episode: {self._safe_type_cast(ep)} |'
+
+            if series_flag:
+                cur_season = int(ep.split('e')[0].replace('s', ''))
+                ep_no = int(ep.split('e')[-1])
+                if prev_season != cur_season:
+                    self._colprint('results', f"-------------- Season: {cur_season:} --------------")
+                    prev_season = cur_season
+            elif type(ep) == str and ep.startswith('m'):
+                display_prefix = 'Movie'
+                ep_no = int(ep.replace('m', ''))
+            else:
+                ep_no = ep
+
+            self.logger.debug(f'{display_prefix}: {ep}, Link: {link}')
+            info = f'{display_prefix}: {self._safe_type_cast(ep_no)} |'
 
             # select the resolution based on the selection strategy
             selected_resolution = self._resolution_selector(link.keys(), resolution, self.selector_strategy)

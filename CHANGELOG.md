@@ -1,5 +1,5 @@
 ## Changelog
- - Version 2.12.1 [2024-04-14]
+ - Version 2.12.2 [2024-04-20]
    - New Feature #11: Support for Movies & TV Shows is finally here.
    - AnimePahe: Reload saved cookies for faster loading.
    - Several optimizations under the hood.

@@ -231,12 +231,12 @@ def downloader(ep_details, dl_config):
 
     download_type = ep_details['downloadType']
     # set output directory based on series type
-    if ep_details.get('type', '') == 'tv':
-        dl_config['download_dir'] = f"{dl_config['download_dir']}{os.sep}Season-{ep_details['season']}"     # add extra folder for season
     out_dir = dl_config['download_dir']
+    if ep_details.get('type', '') == 'tv':
+        out_dir = f"{out_dir}{os.sep}Season-{ep_details['season']}"     # add extra folder for season
 
     # create download client for the episode based on type
-    logger.debug(f'creating download client with {ep_details = }, {dl_config = }')
+    logger.debug(f'Creating download client with {ep_details = }, {dl_config = }')
 
     if download_type == 'hls':
         logger.debug(f'Creating HLS download client for {out_file}')

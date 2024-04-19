@@ -16,9 +16,9 @@ class VidSrcClient(BaseClient):
         self.search_url = self.base_url + config['search_url']
         self.search_link_element = config['search_link_element']
         self.series_info_element = config['series_info_element']
-        self.episodes_list_element = config['episodes_list_element']
         vs_base_url = config['Vidsrc']['base_url']
         self.episodes_list_url = vs_base_url + config['Vidsrc']['episodes_list_url']
+        self.episodes_list_element = config['Vidsrc']['episodes_list_element']
         self.sources_url = vs_base_url + config['Vidsrc']['sources_url']
         self.vidplay_source_url = vs_base_url + config['Vidsrc']['vidplay_source_url']
         self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
@@ -199,7 +199,7 @@ class VidSrcClient(BaseClient):
                 })
                 all_episodes_list.append(episode_dict)
 
-        return all_episodes_list
+        return sorted(all_episodes_list, key=lambda x: (x.get('season'), x['episode']))     # sort by seasons if exists and episodes
 
     # step-3
     def show_episode_results(self, items, *predefined_range):
@@ -220,8 +220,8 @@ class VidSrcClient(BaseClient):
             if cur_season >= start and cur_season <= end:
                 if prev_season != cur_season:
                     self._colprint('results', f"-------------- Season: {cur_season} --------------")
+                    prev_season = cur_season
                 self._colprint('results', f"Season: {self._safe_type_cast(item.get('season'))} | {item.get('episodeName')}")
-                prev_season = cur_season
 
     # step-4
     def fetch_episode_links(self, episodes, ep_ranges):
@@ -229,13 +229,17 @@ class VidSrcClient(BaseClient):
         fetch only required episodes based on episode range provided
         '''
         download_links = {}
-        series_flag = True if episodes[0]['type'] == 'tv' else False
+        series_flag, display_prefix = (True, 'Episode') if episodes[0]['type'] == 'tv' else (False, 'Movie')
+        prev_season = None
 
         for episode in episodes:
             # self.logger.debug(f'Current {episode = }')
             season_no, ep_no = episode.get('season'), float(episode.get('episode'))
             if series_flag and season_no in ep_ranges:
                 ep_start, ep_end, specific_eps = ep_ranges[season_no].get('start', 0), ep_ranges[season_no].get('end', 0), ep_ranges[season_no].get('specific_no', [])
+                if prev_season != season_no:
+                    self._colprint('results', f"-------------- Season: {season_no} --------------")
+                    prev_season = season_no
             else:
                 ep_start, ep_end, specific_eps = ep_ranges.get('start', 0), ep_ranges.get('end', 0), ep_ranges.get('specific_no', [])
 
@@ -253,23 +257,25 @@ class VidSrcClient(BaseClient):
                     link = None
 
                 if link is not None:
+                    # udb key format: s + SEASON + e + EPISODE / m + MOVIE
+                    udb_item_key = f"s{episode.get('season')}e{episode.get('episode')}" if series_flag else f"m{episode.get('episode')}"
                     # add episode details & vidplay link to udb dict
-                    self._update_udb_dict(episode.get('episode'), episode)
-                    self._update_udb_dict(episode.get('episode'), {'vidplayLink': link, 'refererLink': link})
+                    self._update_udb_dict(udb_item_key, episode)
+                    self._update_udb_dict(udb_item_key, {'vidplayLink': link, 'refererLink': link})
 
                     self.logger.debug(f'Extracting m3u8 links for {link = }')
                     # get download sources
                     m3u8_links = self.vpc._resolve_sources(link)
                     # get subtitles dictionary (key:value = language:link) and add to udb dict
                     subtitles = self.vpc._get_vidplay_subtitles(link.split('?')[1])
-                    self._update_udb_dict(episode.get('episode'), {'subtitles': subtitles})
+                    self._update_udb_dict(udb_item_key, {'subtitles': subtitles})
                     if 'error' not in m3u8_links:
                         # get actual download links
                         m3u8_links = self._get_download_links(m3u8_links, link, self.preferred_urls, self.blacklist_urls)
                     self.logger.debug(f'Extracted {m3u8_links = }')
 
-                    download_links[episode.get('episode')] = m3u8_links
-                    self._show_episode_links(episode.get('episode'), m3u8_links)
+                    download_links[udb_item_key] = m3u8_links
+                    self._show_episode_links(episode.get('episode'), m3u8_links, display_prefix)
 
         return download_links
 

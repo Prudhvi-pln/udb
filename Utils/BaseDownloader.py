@@ -23,6 +23,9 @@ class BaseDownloader():
         # set downloader configuration
         self.out_file = ep_details['episodeName']
         self.out_dir = dl_config['download_dir']
+        # add extra folder for season
+        if ep_details.get('type', '') == 'tv':
+            self.out_dir = f"{self.out_dir}{os.sep}Season-{ep_details['season']}"
         self.concurrency = dl_config['concurrency_per_file'] if dl_config['concurrency_per_file'] != 'auto' else None
         self.parent_temp_dir = dl_config['temp_download_dir'] if dl_config['temp_download_dir'] != 'auto' else os.path.join(f'{self.out_dir}', 'temp_dir')
         self.temp_dir = os.path.join(f"{self.parent_temp_dir}", f"{self.out_file.replace('.mp4','')}") #create temp directory per episode
