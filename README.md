@@ -4,7 +4,7 @@ Welcome to the UDB, the Ultimate-Download-Bot for Anime, Drama, Movies & TV Show
 
 ## Insipiration
 
-It is a weekend and you found a good anime to binge-watch. But the effort of downloading all episodes (especially for series like One Piece 😅), the pain is unimaginable. _Ofcourse, you have an option to watch online, but what about people with poor unstable networks, or students with limited access to wifi_. So, this is created to help all such troubled souls. As Ikta Solorok once said: `Laziness is the mother of evolution`
+It is a weekend and you found a good anime/series to binge-watch. But the effort of downloading all episodes (especially for series like One Piece 😅), the pain is unimaginable. _Ofcourse, you have an option to watch online, but what about people with poor unstable networks, or students with limited access to wifi_. So, this is created to help all such troubled souls. As Ikta Solorok once said: `Laziness is the mother of evolution`
 
 ## Overview
 
@@ -22,6 +22,7 @@ The UDB is a fantastic tool designed for all the anime, drama, series lovers out
 - **Informative Progress Bar:** Track the progress of your downloads with a visually appealing progress bar.
 - **Command Line Interface (CLI) Automation:** UDB provides robust support for CLI arguments, facilitating seamless automation of tasks.
 - **High-speed Downloader:** Optimized to offer best download experience.
+- **Ad-Free Experience:** UDB offers an ad-free downloading experience, ensuring uninterrupted access to your favorite anime, drama, movies, and TV series without any distractions.
 
 ## Supported OS
 - Windows
