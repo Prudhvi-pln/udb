@@ -89,7 +89,7 @@ class VidSrcClient(BaseClient):
         soup = self._get_bsoup(list_episodes_url, silent=True)
         if soup is None:
             self.logger.error('Selected show not found in VidSrc catalog.')
-            exit(1)
+            self._exit(1)
 
         # create list of dict of episode links
         self.logger.debug(f'Extracting episodes details to create list of dict')

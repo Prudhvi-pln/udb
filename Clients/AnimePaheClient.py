@@ -73,7 +73,7 @@ class AnimePaheClient(BaseClient):
         chrome_path = uc.find_chrome_executable()
         if chrome_path is None or chrome_path == '':
             self.logger.error('AnimePahe requires a chrome browser to be installed. Unable to proceed further!')
-            exit(1)
+            self._exit(0)
 
         # dynamically fetch the chrome version
         self.logger.debug('Dynamically fetching the installed Chrome version')
@@ -82,7 +82,7 @@ class AnimePaheClient(BaseClient):
             self.logger.debug(f'Current chrome version: {main_version}')
         except Exception as e:
             self.logger.error(f'Failed to fetch Chrome version. Error: {e}')
-            exit(1)
+            self._exit(0)
 
         driver = uc.Chrome(headless=True, version_main=main_version)
         driver.get(url)

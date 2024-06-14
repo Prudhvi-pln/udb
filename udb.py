@@ -7,7 +7,7 @@ from time import time
 import traceback
 
 # Note: For optimization, custom modules are imported as required
-from Utils.commons import colprint_init, colprint, PRINT_THEMES
+from Utils.commons import colprint_init, colprint, PRINT_THEMES, ExitException
 from Utils.commons import get_current_version, check_for_updates, update_udb
 from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, threaded
 
@@ -75,9 +75,9 @@ def get_series_type(keys, predefined_input=None):
         series_type = predefined_input
         if series_type not in types:
             logger.error(f'Invalid series type: {series_type}')
-            exit(1)
+            raise ExitException(0)
     else:
-        series_type = colprint('user_input', '\nEnter your choice: ', input_type='recurring', input_dtype='int', input_options=types)
+        series_type = colprint('user_input', '\nEnter your choice: ', input_type='recurring', input_dtype='int', input_options=types, allow_empty_input=False)
 
     logger.debug(f'Series type selected: {series_type}')
 
@@ -105,7 +105,7 @@ def search_and_select_series(predefined_search_input=None, predefined_year_input
             if predefined_search_input is None and predefined_year_input is None:
                 continue
             else:
-                exit(1)
+                raise ExitException(0)
 
         colprint('header', "\nEnter 0 to search with different key word")
 
@@ -119,13 +119,13 @@ def search_and_select_series(predefined_search_input=None, predefined_year_input
                     break
             colprint('predefined', f'\nSelected option based on predefined year [{predefined_year_input}]: {option}')
         else:
-            option = colprint('user_input', "\nSelect one of the above: ", input_type='recurring', input_dtype='int', input_options=list(range(len(search_results)+1)))
+            option = colprint('user_input', "\nSelect one of the above: ", input_type='recurring', input_dtype='int', input_options=list(range(len(search_results)+1)), allow_empty_input=False)
 
         logger.debug(f'Selected option: {option}')
 
         if option is None and predefined_year_input:
             logger.error('No results found based on predefined input')
-            exit(1)
+            raise ExitException(0)
         elif option == 0:
             continue
         else:
@@ -293,6 +293,7 @@ def batch_downloader(download_fn, links, dl_config, max_parallel_downloads):
 
 if __name__ == '__main__':
     try:
+        skip_restart = False
         __version__ = get_current_version()
 
         # parse cli arguments
@@ -345,14 +346,14 @@ if __name__ == '__main__':
                 status_message = f'UDB updated to version {__version__}'
 
             colprint('header', status_message)
-            exit(0)
+            raise ExitException(0)
 
         if status_code == 1:
             colprint('blinking', status_message)
         elif status_code == 2:
             colprint('error', status_message)
 
-        if display_version: exit(0)     # display updates information and exit
+        if display_version: raise ExitException(0)     # display updates information and exit
 
         # load config from yaml to dict using yaml
         config = load_yaml(config_file)
@@ -394,8 +395,8 @@ if __name__ == '__main__':
         colprint('results', f'{len(episodes)} episodes found.')
 
         if len(episodes) == 0:
-            logger.error('No episodes found in selected series! Exiting.')
-            exit(0)
+            logger.error('No episodes found in selected series!')
+            raise 
 
         logger.info(f'Displaying episodes list')
         client.show_episode_results(episodes, seasons_predef, episodes_predef)
@@ -413,8 +414,8 @@ if __name__ == '__main__':
         logger.debug(f'Fetched episodes: {target_ep_links}')
 
         if len(target_ep_links) == 0:
-            logger.error("No episodes are available for download! Exiting.")
-            exit(0)
+            logger.error("No episodes are available for download!")
+            raise ExitException(1)
 
         # set output names & make it windows safe
         logger.debug(f'Set output names based on {target_series}')
@@ -443,7 +444,7 @@ if __name__ == '__main__':
             colprint('predefined', f'\nUsing Predefined Input for resolution: {resolution_predef}')
             resolution = resolution_predef
         else:
-            resolution = colprint('user_input', f"\nEnter download resolution ({'|'.join(valid_resolutions)}) [default=720]: ", input_type='recurring', input_dtype='int') or "720"
+            resolution = str(colprint('user_input', f"\nEnter download resolution ({'|'.join(valid_resolutions)}) [default=720]: ", input_type='recurring', input_dtype='int')) or "720"
 
         logger.info(f'Selected download resolution: {resolution}')
 
@@ -456,13 +457,13 @@ if __name__ == '__main__':
 
         if len(target_dl_links) == 0:
             logger.error('No episodes available to download! Exiting.')
-            exit(0)
+            raise ExitException(1)
 
         msg = f'Episodes available for download [{available_dl_count}/{len(target_dl_links)}].'
         colprint('header', f'\n{msg}', end=' ')
         if available_dl_count == 0:
             logger.error('\nNo episodes available to download! Exiting.')
-            exit(0)
+            raise ExitException(1)
         elif start_download_predef:
             colprint('predefined', f'Using Predefined Input for start download: {start_download_predef}')
             proceed = 'y'
@@ -483,7 +484,7 @@ if __name__ == '__main__':
             colprint('yellow', f'Proceeding to download as per edited range [{new_ep_start} - {new_ep_end}]...')
         else:
             logger.error("Download halted on user input")
-            exit(0)
+            raise ExitException(1)
 
         # start downloading...
         msg = f"Downloading episode(s) to {downloader_config['download_dir']}..."
@@ -494,19 +495,22 @@ if __name__ == '__main__':
 
     except KeyboardInterrupt as ki:
         logger.error('User interrupted')
-        # exit(0)
+
+    except ExitException as ee:
+        # skip restart only if exit code is 0
+        if int(str(ee)) == 0: skip_restart = True
 
     except Exception as e:
         logger.error(f'Error occurred: {e}. Check log for more details.')
         logger.warning(f'Stacktrace: {traceback.format_exc()}')
-        # exit(1)
 
     finally:
         # Auto-start a new UDB instance
-        continuation_prompt = colprint('user_input', 'Ready for one more round of downloads (y|n)? ', input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
+        if skip_restart: exit(0)
+        continuation_prompt = colprint('user_input', '\nReady for one more? Reload UDB (y|n)? ', input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
         if continuation_prompt == 'y':
             logger.debug('Restarting UDB session...')
-            # os.execv(sys.executable, [sys.executable, sys.argv[0]])     # use sys.argv to pass along arguments if requested
+            # os.execv(sys.executable, [sys.executable, sys.argv[0]])     # use sys.argv to pass along arguments if required
             os.system(f'{sys.executable} {sys.argv[0]}')
         else:
-            colprint('results', "\nAlright, Thanks for using UDB! Come back soon for more downloads!")
+            colprint('results', "Alright, Thanks for using UDB! Come back soon for more downloads!\n")

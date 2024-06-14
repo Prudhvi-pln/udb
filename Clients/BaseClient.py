@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 import base64
 from Cryptodome.Cipher import AES
 
-from Utils.commons import colprint, exec_os_cmd, pretty_time, retry, threaded
+from Utils.commons import colprint, exec_os_cmd, pretty_time, retry, threaded, ExitException
 
 
 class BaseClient():
@@ -57,6 +57,12 @@ class BaseClient():
             return colprint(theme, text, **kwargs)
         else:
             colprint(theme, text, **kwargs)
+
+    def _exit(self, code):
+        '''
+        Wrapper to raise ExitException
+        '''
+        raise ExitException(code)
 
     @retry()
     def _send_request(self, url, referer=None, extra_headers=None, cookies={}, return_type='text', silent=False):

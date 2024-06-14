@@ -32,6 +32,12 @@ DISPLAY_COLORS = True
 # strip ANSI characters, to write to log file
 strip_ansi = lambda text: re.sub(r'\x1b\[[0-9;]*m', '', text)
 
+class ExitException(Exception):
+    '''
+    Custom exception which forces UDB to exit
+    '''
+    pass
+
 def get_current_version():
     '''
     Returns the current version of UDB
@@ -119,15 +125,18 @@ def colprint(theme, text, **kwargs):
     input_type = kwargs.get('input_type')
     input_dtype = kwargs.get('input_dtype')
     input_options = kwargs.get('input_options')
+    allow_empty_input = kwargs.get('allow_empty_input', True)
 
-    def _get_input_(msg, input_type='once', input_dtype=None, input_options=[]):
+    def _get_input_(msg, input_type='once', input_dtype=None, input_options=[], allow_empty_input=True):
         user_input = input(f'{msg}').strip()
         # do not return till valid input is entered
         if input_type == 'recurring':
             try:
                 # data type check
                 try:
-                    if input_dtype == 'int':
+                    if user_input == '' and allow_empty_input:
+                        return user_input       # if it is empty, it means default value
+                    elif input_dtype == 'int':
                         user_input = int(user_input)
                     elif input_dtype == 'float':
                         user_input = float(user_input)
@@ -143,12 +152,12 @@ def colprint(theme, text, **kwargs):
 
             except ValueError as ve:
                 logging.error(ve)
-                return _get_input_(msg, input_type, input_dtype, input_options)
+                return _get_input_(msg, input_type, input_dtype, input_options, allow_empty_input)
 
         return user_input
 
     if 'input' in theme:
-        return _get_input_(f'{c_strt}{text}{c_end}', input_type, input_dtype, input_options)
+        return _get_input_(f'{c_strt}{text}{c_end}', input_type, input_dtype, input_options, allow_empty_input)
     else:
         print(f'{c_strt}{text}{c_end}', end=line_end)
 
@@ -227,14 +236,14 @@ def threaded(max_parallel=None, thread_name_prefix='udb-', print_status=False):
 def load_yaml(config_file):
     if not os.path.isfile(config_file):
         colprint('error', f'Config file [{config_file}] not found')
-        exit(1)
+        raise ExitException(0)
 
     with open(config_file, "r") as stream:
         try:
             return yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             colprint('error', f"Error occured while reading yaml file: {exc}")
-            exit(1)
+            raise ExitException(0)
 
 # custom logging formatter to highlight error messages
 class CustomLogFormatter(logging.Formatter):
