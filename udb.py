@@ -2,7 +2,7 @@ __author__ = 'Prudhvi PLN'
 
 import argparse
 from datetime import datetime
-import os
+import os, sys
 from time import time
 import traceback
 
@@ -16,7 +16,7 @@ def get_client():
     '''Return a client instance'''
     # add hls_size_accuracy parameter passed from cli
     config[series_type].update({'hls_size_accuracy': hls_size_accuracy})
-    __base_url = config[series_type]['base_url'].lower()
+    __base_url = config[series_type].get('base_url', '').lower()
     if 'anime' in series_type.lower():
         if 'animepahe' in __base_url:
             logger.debug('Creating Anime Client for AnimePahe site')
@@ -73,16 +73,15 @@ def get_series_type(keys, predefined_input=None):
     if predefined_input:
         colprint('predefined', f'\nUsing Predefined Input: {predefined_input}')
         series_type = predefined_input
+        if series_type not in types:
+            logger.error(f'Invalid series type: {series_type}')
+            exit(1)
     else:
-        series_type = int(colprint('user_input', '\nEnter your choice: '))
+        series_type = colprint('user_input', '\nEnter your choice: ', input_type='recurring', input_dtype='int', input_options=types)
 
     logger.debug(f'Series type selected: {series_type}')
 
-    if series_type not in types:
-        logger.error('Invalid input!')
-        exit(1)
-    else:
-        return types[series_type]
+    return types[series_type]
 
 def search_and_select_series(predefined_search_input=None, predefined_year_input=None):
     while True:
@@ -111,28 +110,21 @@ def search_and_select_series(predefined_search_input=None, predefined_year_input
         colprint('header', "\nEnter 0 to search with different key word")
 
         # get user selection for the search results
-        try:
-            option = -1
-            if predefined_year_input:
-                # get key from search_results where year is predefined_year_input
-                for idx, result in search_results.items():
-                    if int(result['year']) == predefined_year_input:
-                        option = idx
-                        break
-                colprint('predefined', f'\nSelected option based on predefined year [{predefined_year_input}]: {option}')
-            elif option < 0:
-                option = int(colprint('user_input', "\nSelect one of the above: "))
-        except ValueError as ve:
-            logger.error("Invalid input!")
-            exit(1)
+        option = None
+        if predefined_year_input:
+            # get key from search_results where year is predefined_year_input
+            for idx, result in search_results.items():
+                if str(result['year']) == str(predefined_year_input):
+                    option = idx
+                    break
+            colprint('predefined', f'\nSelected option based on predefined year [{predefined_year_input}]: {option}')
+        else:
+            option = colprint('user_input', "\nSelect one of the above: ", input_type='recurring', input_dtype='int', input_options=list(range(len(search_results)+1)))
 
         logger.debug(f'Selected option: {option}')
 
-        if option < 0 and predefined_year_input:
+        if option is None and predefined_year_input:
             logger.error('No results found based on predefined input')
-            exit(1)
-        elif option < 0 or option > len(search_results):
-            logger.error(f'Invalid option selected: {option}')
             exit(1)
         elif option == 0:
             continue
@@ -157,7 +149,7 @@ def get_ep_range(default_ep_range, mode='Enter', _episodes_predef=None, type='ep
         colprint('predefined', f'\nUsing Predefined Input for {type} to download: {_episodes_predef}')
         ep_user_input = _episodes_predef
     else:
-        ep_user_input = colprint('user_input', f"\n{mode} {type} to download (ex: 1-16) [default={default_ep_range}]: ") or "all"
+        ep_user_input = colprint('user_input', f"\n{mode} {type} to download (ex: 1-16) [default={default_ep_range}]: ", input_type='recurring', input_dtype='range') or "all"
         if str(ep_user_input).lower() == 'all':
             ep_user_input = default_ep_range
 
@@ -195,7 +187,7 @@ def get_ep_range_multiple(season_ep_ranges):
     if episodes_predef:
         dl_entire_season = 'n'
     else:
-        dl_entire_season = colprint('user_input', f"\nDownload entire season(s) (y|n)? ").lower() or 'y'
+        dl_entire_season = colprint('user_input', f"\nDownload entire season(s) (y|n)? ", input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
 
     # return entire season range
     if dl_entire_season == 'y':
@@ -451,7 +443,7 @@ if __name__ == '__main__':
             colprint('predefined', f'\nUsing Predefined Input for resolution: {resolution_predef}')
             resolution = resolution_predef
         else:
-            resolution = colprint('user_input', f"\nEnter download resolution ({'|'.join(valid_resolutions)}) [default=720]: ") or "720"
+            resolution = colprint('user_input', f"\nEnter download resolution ({'|'.join(valid_resolutions)}) [default=720]: ", input_type='recurring', input_dtype='int') or "720"
 
         logger.info(f'Selected download resolution: {resolution}')
 
@@ -475,7 +467,7 @@ if __name__ == '__main__':
             colprint('predefined', f'Using Predefined Input for start download: {start_download_predef}')
             proceed = 'y'
         else:
-            proceed = colprint('user_input', f"Proceed to download (y|n)? ").lower() or 'y'
+            proceed = colprint('user_input', f"Proceed to download (y|n)? ", input_type='recurring', input_options=['y', 'n', 'Y', 'N', 'e']).lower() or 'y'
 
         logger.info(f'{msg} Proceed to download? {proceed}')
 
@@ -502,9 +494,17 @@ if __name__ == '__main__':
 
     except KeyboardInterrupt as ki:
         logger.error('User interrupted')
-        exit(0)
+        # exit(0)
 
     except Exception as e:
         logger.error(f'Error occurred: {e}. Check log for more details.')
         logger.warning(f'Stacktrace: {traceback.format_exc()}')
-        exit(1)
+        # exit(1)
+
+    finally:
+        continuation_prompt = colprint('user_input', 'Ready for one more round of downloads (y|n)? ', input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
+        if continuation_prompt == 'y':
+            logger.debug('Restarting UDB session...')
+            os.execv(sys.executable, [sys.executable, sys.argv[0]])     # extend this with sys.argv to pass along arguments as well
+        else:
+            colprint('results', "\nAlright, Thanks for using UDB! Come back soon for more downloads!")

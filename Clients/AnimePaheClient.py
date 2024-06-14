@@ -309,7 +309,7 @@ class AnimePaheClient(BaseClient):
         if last_page > 1:
             for pgno in range(2, last_page+1):
                 self.logger.debug(f'Found more than 1 pages. Fetching episodes from page-{pgno}')
-                episodes_data.extend(self._send_request(f'{list_episodes_url}&page={pgno}', cookies=self.cookies, return_type='json'))
+                episodes_data.extend(self._send_request(f'{list_episodes_url}&page={pgno}', cookies=self.cookies, return_type='json').get('data', []))
 
         return episodes_data
 

@@ -5,10 +5,8 @@ import os
 import requests
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from requests.adapters import HTTPAdapter
 from shutil import rmtree
 from tqdm.auto import tqdm
-from urllib3.util.retry import Retry
 
 from Utils.commons import colprint, exec_os_cmd, retry, PRINT_THEMES, DISPLAY_COLORS
 
@@ -37,13 +35,7 @@ class BaseDownloader():
 
         # create a requests session and use across to re-use cookies
         self.req_session = session if session else requests.Session()
-        # add retries with backoff
-        retry = Retry(total=3, backoff_factor=0.1)
-        adapter = HTTPAdapter(max_retries=retry)
-        self.req_session.mount('http://', adapter)
-        self.req_session.mount('https://', adapter)
-        # disable insecure warnings
-        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+
         self.req_session.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
             "Accept-Encoding": "*",
@@ -63,9 +55,9 @@ class BaseDownloader():
     def _get_raw_stream_data(self, url, stream=True, header=None):
         # print(f'{self.req_session}: {url}')
         if header is not None:
-            response = self.req_session.get(url, verify=False, stream=stream, timeout=self.request_timeout, headers=header)
+            response = self.req_session.get(url, stream=stream, timeout=self.request_timeout, headers=header)
         else:
-            response = self.req_session.get(url, verify=False, stream=stream, timeout=self.request_timeout)
+            response = self.req_session.get(url, stream=stream, timeout=self.request_timeout)
         # print(response)
 
         if response.status_code in [200, 206]:  # 206 means partial data (i.e., for chunked downloads)

@@ -1,8 +1,7 @@
 __author__ = 'Prudhvi PLN'
 
-from urllib.parse import quote_plus
-
 from Clients.BaseClient import BaseClient
+from Clients.TMDBClient import TMDBClient
 from Clients.VidPlayClient import VidPlayClient
 
 
@@ -12,13 +11,12 @@ class VidSrcClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
-        self.base_url = config['base_url']
-        self.search_url = self.base_url + config['search_url']
-        self.search_link_element = config['search_link_element']
-        self.series_info_element = config['series_info_element']
+        # initialize TMDB Client
+        config['TMDB']['request_timeout'] = config['request_timeout']
+        self.tmdb_client = TMDBClient(config['TMDB'], session)
         vs_base_url = config['Vidsrc']['base_url']
         self.episodes_list_url = vs_base_url + config['Vidsrc']['episodes_list_url']
-        self.episodes_list_element = config['Vidsrc']['episodes_list_element']
+        self.episodes_list_element = config['Vidsrc'].get('episodes_list_element', '.episodes')
         self.sources_url = vs_base_url + config['Vidsrc']['sources_url']
         self.vidplay_source_url = vs_base_url + config['Vidsrc']['vidplay_source_url']
         self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
@@ -32,61 +30,6 @@ class VidSrcClient(BaseClient):
         # initialize VidPlay Client
         config['Vidplay']['request_timeout'] = config['request_timeout']
         self.vpc = VidPlayClient(config['Vidplay'], session)
-
-    # step-1.1
-    def _get_series_info(self, link):
-        '''
-        get metadata of movie/show
-        '''
-        meta = {}
-        soup = self._get_bsoup(link)
-        # self.logger.debug(f'bsoup response for {link = }: {soup}')
-
-        for i in soup.select(self.series_info_element):
-            k = i.get_text(':', strip=True)
-            meta[k.split(':')[0]] = k.split(':')[-1]
-
-        # add additional metadata. Metadata extraction elements are hardcoded. This may change depending on TMDB website.
-        try:
-            meta['genre'] = ', '.join([ i.text.strip() for i in soup.select('span.genres a') ])
-            meta['score'] = soup.select_one('div.user_score_chart')['data-percent']
-            meta['year'] = soup.select_one('span.release_date').text.strip().replace('(', '').replace(')', '')
-            meta['runtime'] = soup.select_one('span.runtime').text.strip()
-        except:
-            pass
-
-        # add tmdb id. required to retrieve data from VidSrc
-        meta['show_id'] = link.split('?')[0].split('/')[-1].split('-')[0]
-        # add type of series: TV-show or Movie
-        meta['type'] = link.split('/')[-2].lower()
-        # add count of seasons & episodes if it is a released series
-        if meta['type'] == 'tv' and meta.get('year') is not None:
-            try:
-                # this is an extra api call just to fetch season and episode counts
-                vidsrc_soup = self._get_bsoup(self.episodes_list_url.format(type=meta['type'], imdb_id=meta['show_id']), silent=True)
-                seasons = len(vidsrc_soup.select(self.episodes_list_element))
-                episodes = len(vidsrc_soup.select(self.episodes_list_element + ' li'))
-                meta['seasons'], meta['episodes'] = seasons, episodes
-            except:
-                pass
-
-        return meta
-
-    # step-1.2
-    def _show_search_results(self, key, details):
-        '''
-        pretty print the results based on your search
-        '''
-        line = f"{key}: {details.get('title')} | Language: {details.get('Original Language', 'N/A')} | Genre: {details.get('genre', 'N/A')}" + \
-                f"\n   | Type: {'TV Show' if details.get('type') == 'tv' else details.get('type').capitalize()} | User Score: {details.get('score', '0')}% " + \
-                f"| Released: {details.get('year', 'N/A')} | Status: {details.get('Status')}"
-
-        if details.get('type').lower() == 'movie':
-            line += f"\n   | Duration: {details.get('runtime', 'N/A')}"
-        else:
-            line += f"\n   | Seasons: {details.get('seasons', 'N/A')} | Total Episodes: {details.get('episodes', 'N/A')}"
-
-        self._colprint('results', line)
 
     # step-3.1
     def get_season_ep_ranges(self, episodes):
@@ -130,33 +73,9 @@ class VidSrcClient(BaseClient):
     # step-1
     def search(self, keyword, search_limit=5):
         '''
-        search for movie/show based on a keyword
+        search for movie/show based on a keyword using TMDB API.
         '''
-        valid_types = ['movie', 'tv']
-        # url encode the search word
-        search_key = quote_plus(keyword)
-        search_url = self.search_url + search_key + '&language=en-US'
-        soup = self._get_bsoup(search_url)
-
-        # get matched items. Limit the search results to be displayed.
-        search_links = [ i for i in soup.select(self.search_link_element) if i['data-media-type'].lower() in valid_types ][:search_limit]
-
-        idx = 1
-        search_results = {}
-        for element in search_links:
-            title = element.text
-            link = element['href']
-            if link.startswith('/'):
-                link = self.base_url + link
-            item = {'title': title, 'link': link}
-            # get every search result details
-            item.update(self._get_series_info(link))
-            # add index to every search result
-            search_results[idx] = item
-            self._show_search_results(idx, item)
-            idx += 1
-
-        return search_results
+        return self.tmdb_client.search(keyword, search_limit)
 
     # step-2
     def fetch_episodes_list(self, target):
@@ -164,7 +83,7 @@ class VidSrcClient(BaseClient):
         fetch all available episodes list in the selected show
         '''
         all_episodes_list = []
-        list_episodes_url = self.episodes_list_url.format(type=target['type'], imdb_id=target['show_id'])
+        list_episodes_url = self.episodes_list_url.format(type=target['type'], tmdb_id=target['show_id'])
 
         self.logger.debug(f'Fetching soup to extract episodes from {list_episodes_url = }')
         soup = self._get_bsoup(list_episodes_url, silent=True)

@@ -1,4 +1,12 @@
 ## Changelog
+ - Version 2.12.3 [2024-06-15]
+   - Updated TMDB Client: Removed dependency on vidsrc while displaying search results.
+   - Updated HLS Downloader: Skip non-downloadable subtitles for Movies/Series.
+   - Fixed HLS Downloader: Unable to download series with special characters like '#'.
+   - Simplified Configuration file.
+   - Added recursive input for user prompts to avoid hassle of reloading from the start.
+   - Other Minor Bug Fixes and performance improvements.
+
  - Version 2.12.2 [2024-04-20]
    - New Feature #11: Support for Movies & TV Shows is finally here.
    - AnimePahe: Reload saved cookies for faster loading.

@@ -2,13 +2,6 @@ Anime (Gogoanime):
   base_url: https://anitaku.to/
   search_url: search.html?keyword=
   episodes_list_url: ajax/load-list-episode?ep_start={ep_start}&ep_end={ep_end}&id=
-  episodes_list_id_element: div.anime_info_body input#movie_id
-  search_link_element: ul.items li p.name a
-  series_info_element: div.anime_info_body p.type
-  episode_list_element: ul#episode_page li a
-  episode_link_element: ul#episode_related li a
-  episode_sub_type_element: ul#episode_related li a div.cate
-  stream_links_element: div.anime_muti_link a
   download_fetch_link: encrypt-ajax.php
   download_dir: D:\Anime
   request_timeout: 30
@@ -30,12 +23,6 @@ Drama (Myasiantv):
   base_url: https://myasiantv.ac/
   search_url: search.html?key=
   episodes_list_url: ajax/episode-list/{series_name}/{pg_no}.html?page={pg_no}
-  search_link_element: ul.items li h2 a
-  series_info_element: div.left p
-  episode_link_element: ul.list-episode li h2 a
-  episode_sub_type_element: ul.list-episode li img
-  episode_upload_time_element: ul.list-episode li span
-  stream_links_element: div.anime_muti_link div
   download_fetch_link: encrypt-ajax.php
   request_timeout: 30
   alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
@@ -45,15 +32,13 @@ Drama (Myasiantv):
   - https://ttcx
   blacklist_urls:                             # avoid below urls while fetching download links
 
-Movies & TV Shows:
-  base_url: https://www.themoviedb.org/
-  search_url: search?query=
-  search_link_element: .details a.result
-  series_info_element: section.facts p
+Movies & TV Shows (Vidsrc):
+  TMDB:
+    base_url: https://www.themoviedb.org/
+    search_url: search?query=
   Vidsrc:
     base_url: https://vidsrc.to/
-    episodes_list_url: embed/{type}/{imdb_id}
-    episodes_list_element: .episodes
+    episodes_list_url: embed/{type}/{tmdb_id}
     sources_url: ajax/embed/episode/{episode_id}/sources
     vidplay_source_url: ajax/embed/source/{vidplay_id}
   Vidplay:
@@ -73,7 +58,7 @@ DownloaderConfig:
   max_parallel_downloads: 2
 
 LoggerConfig:
-  log_level: INFO
+  log_level: DEBUG
   log_dir: log
   log_file_name: udb.log
   max_log_size_in_kb: 100

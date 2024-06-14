@@ -114,10 +114,43 @@ def colprint(theme, text, **kwargs):
     else:
         c_strt, c_end = '', ''
 
+    # parse the additional arguments
+    line_end = kwargs.get('end')
+    input_type = kwargs.get('input_type')
+    input_dtype = kwargs.get('input_dtype')
+    input_options = kwargs.get('input_options')
+
+    def _get_input_(msg, input_type='once', input_dtype=None, input_options=[]):
+        user_input = input(f'{msg}').strip()
+        # do not return till valid input is entered
+        if input_type == 'recurring':
+            try:
+                # data type check
+                try:
+                    if input_dtype == 'int':
+                        user_input = int(user_input)
+                    elif input_dtype == 'float':
+                        user_input = float(user_input)
+                    elif input_dtype == 'range':
+                        # special case for range inputs. check if the values in range are int / float. allow empty value.
+                        temp_inputs = [ float(i) if '.' in i else int(i) for i in user_input.replace('-', ',').split(',') if i ]
+                except ValueError:
+                    raise ValueError('Invalid input! Please enter a valid input.')
+
+                # valid input check
+                if input_options and not user_input in input_options:
+                    raise ValueError('Invalid option selected! Please select an option from above.')
+
+            except ValueError as ve:
+                logging.error(ve)
+                return _get_input_(msg, input_type, input_dtype, input_options)
+
+        return user_input
+
     if 'input' in theme:
-        return input(f'{c_strt}{text}{c_end}', **kwargs)
+        return _get_input_(f'{c_strt}{text}{c_end}', input_type, input_dtype, input_options)
     else:
-        print(f'{c_strt}{text}{c_end}', **kwargs)
+        print(f'{c_strt}{text}{c_end}', end=line_end)
 
 # custom decorator for retring of a function
 def retry(exceptions=(Exception,), tries=3, delay=2, backoff=2, print_errors=False):

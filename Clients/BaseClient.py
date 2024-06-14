@@ -5,9 +5,7 @@ import logging
 import re
 import requests
 from bs4 import BeautifulSoup as BS
-from requests.adapters import HTTPAdapter
 from urllib.parse import parse_qs, urlparse
-from urllib3.util.retry import Retry
 
 # modules for encryption
 import base64
@@ -28,13 +26,7 @@ class BaseClient():
             self.hls_size_accuracy
         except AttributeError:
             self.hls_size_accuracy = 0      # set default value if not set
-        # add retries with backoff. If you add retry decorator, it'll be more retries
-        retry = Retry(total=3, backoff_factor=0.1)
-        adapter = HTTPAdapter(max_retries=retry)
-        self.req_session.mount('http://', adapter)
-        self.req_session.mount('https://', adapter)
-        # disable insecure warnings
-        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+
         self.header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
             "Accept-Encoding": "*",
@@ -75,13 +67,19 @@ class BaseClient():
         - return_type - valid options are text/json/bytes/raw
         - silent: boolean - suppress logging errors
         '''
+        def _conditional_logger(silent, message):
+            if silent:
+                self.logger.warning(f'[Suppressed error] {message}')
+            else:       # display error message onto console and log
+                self.logger.error(message)
+
         # print(f'{self.req_session}: {url}')
         header = self.header
         if referer: header.update({'referer': referer})
         if return_type.lower() == 'json': header.update({'accept': 'application/json'})
         if extra_headers: header.update(extra_headers)
         # self.logger.debug(f'Cookies before request: {self.req_session.cookies.get_dict()}')
-        response = self.req_session.get(url, timeout=self.request_timeout, headers=header, cookies=cookies, verify=False)
+        response = self.req_session.get(url, timeout=self.request_timeout, headers=header, cookies=cookies)
         # self.logger.debug(f'Cookies after request: {self.req_session.cookies.get_dict()}')
         # print(response)
 
@@ -91,7 +89,10 @@ class BaseClient():
             elif return_type.lower() == 'bytes':
                 return response.content
             elif return_type.lower() == 'json':
-                return response.json()
+                try:
+                    return response.json()
+                except json.JSONDecodeError as jde:
+                    _conditional_logger(silent, f'Invalid JSON response received')
             elif return_type.lower() == 'raw':
                 return response
 
@@ -101,11 +102,7 @@ class BaseClient():
             raise Exception(msg)
 
         else:
-            msg = f'Failed with code: {response.status_code}'
-            if silent:
-                self.logger.warning(f'[Suppressed error] {msg}')
-            else:       # display error message onto console and log
-                self.logger.error(msg)
+            _conditional_logger(silent, f'Failed with code: {response.status_code}')
 
     def _get_bsoup(self, search_url, referer=None, extra_headers=None, cookies={}, silent=False):
         '''
@@ -581,16 +578,18 @@ class BaseClient():
             # display only required episodes if specified from cli
             show_range = predefined_range
         else:
-            show_range = self._colprint('user_input', f'Enter {type} range to display (ex: 1-16) [default={default_range}]: ') or 'all'
+            show_range = self._colprint('user_input', f'Enter {type} range to display (ex: 1-16) [default={default_range}]: ', input_type='recurring', input_dtype='range') or 'all'
             if show_range.lower() == 'all':
                 show_range = default_range
 
-        try:
-            start, end = map(int, map(float, show_range.split('-')))
-        except ValueError as ve:
-            start = end = int(float(show_range))
-        except Exception as e:
-            pass    # show all episodes
+        # fill the range if it is a relative range
+        if show_range.startswith('-'):
+            show_range = f'{start}{show_range}'
+        elif show_range.endswith('-'):
+            show_range = f'{show_range}{end}'
+        # flatten the episode ranges into a sorted list and pick the first and last
+        ep_selected_for_display = sorted([ float(i) for i in show_range.replace('-', ',').split(',') ])
+        start, end = int(ep_selected_for_display[0]), int(ep_selected_for_display[-1])
 
         if show_range == default_range:
             self._colprint('header', 'Showing all episodes:')

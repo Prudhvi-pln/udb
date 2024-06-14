@@ -79,8 +79,32 @@ class HLSDownloader(BaseDownloader):
         with open(self.m3u8_file, "w") as m3u8_f:
             m3u8_content = re.sub('URI=(.*)/', f'URI="{key_temp_dir}/', m3u8_data, count=1)
             regex_safe = '\\\\' if os.sep == '\\' else '/'
-            m3u8_content = re.sub(r'https://(.*)/', f'{seg_temp_dir}{regex_safe}', m3u8_content)
+            # strip off url for segments
+            m3u8_content = re.sub(r'https://(.*)/', '', m3u8_content)
+            # prefix the downloaded path for segments
+            m3u8_content = re.sub(r'^(?!#).+$', f'{seg_temp_dir}{regex_safe}\g<0>', m3u8_content, flags=re.MULTILINE)
             m3u8_f.write(m3u8_content)
+
+    def _download_subtitles(self):
+        for sub_name in list(self.subtitles):
+            sub_link = self.subtitles[sub_name]
+            sub_file = os.path.join(self.temp_dir, sub_name.replace(' ', '_') + '_' + os.path.basename(sub_link))
+
+            try:
+                self.logger.debug(f'Downloading {sub_name} subtitle from {sub_link} to {sub_file}')
+                if os.path.isfile(sub_file):
+                    self.logger.debug('Subtitle file already exists. Skipping...')
+                    continue
+                sub_content = self._get_stream_data(sub_link)
+                # download the subtitle to local
+                with open(sub_file, 'wb') as f:
+                    f.write(sub_content)
+                # update the dictionary pointing to downloaded file
+                self.subtitles[sub_name] = sub_file
+
+            except Exception as e:
+                self.logger.warning(f'Failed to download {sub_name} subtitle with error: {e}')
+                self.subtitles.pop(sub_name)
 
     def _convert_to_mp4(self):
         # print(f'Converting {self.out_file} to mp4')
@@ -132,6 +156,10 @@ class HLSDownloader(BaseDownloader):
 
         self.logger.debug('Rewrite m3u8 file with downloaded segments paths')
         self._rewrite_m3u8_file(m3u8_data)
+
+        if self.subtitles:
+            self.logger.debug('Downloading subtitles')
+            self._download_subtitles()
 
         self.logger.debug('Converting m3u8 segments to .mp4')
         self._convert_to_mp4()

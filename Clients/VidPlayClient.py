@@ -130,6 +130,7 @@ class VidPlayClient(BaseClient):
         '''
         resolve the download sources and return the list of download sources
         '''
+        self.logger.debug(f'Resolving sources from url: {url}')
         url_data = url.split("?")
 
         try:
