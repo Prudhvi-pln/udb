@@ -502,9 +502,11 @@ if __name__ == '__main__':
         # exit(1)
 
     finally:
+        # Auto-start a new UDB instance
         continuation_prompt = colprint('user_input', 'Ready for one more round of downloads (y|n)? ', input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
         if continuation_prompt == 'y':
             logger.debug('Restarting UDB session...')
-            os.execv(sys.executable, [sys.executable, sys.argv[0]])     # extend this with sys.argv to pass along arguments as well
+            # os.execv(sys.executable, [sys.executable, sys.argv[0]])     # use sys.argv to pass along arguments if requested
+            os.system(f'{sys.executable} {sys.argv[0]}')
         else:
             colprint('results', "\nAlright, Thanks for using UDB! Come back soon for more downloads!")
