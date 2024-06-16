@@ -106,10 +106,11 @@ class BaseClient():
             msg = f'Failed with code: {response.status_code}'
             self.logger.warning(msg)
             raise Exception(msg)
-        elif  response.status_code == 404:     # raise exception if status code is 4xx
+
+        elif response.status_code == 404:                   # raise exception if status code is 4xx
             msg = f'Failed with code: {response.status_code}. Page not found for {url}'
             self.logger.error(msg)
-            #raise Exception(msg)
+            # raise Exception(msg)
 
         else:
             _conditional_logger(silent, f'Failed with code: {response.status_code}')

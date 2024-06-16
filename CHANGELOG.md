@@ -1,5 +1,6 @@
 ## Changelog
- - Version 2.12.3 [2024-06-15]
+ - Version 2.12.4 [2024-06-16]
+   - Fix #18: Page not found during search results
    - Added recursive input for user prompts and whole UDB to avoid hassle of reloading from the start.
    - Updated TMDB Client: Removed dependency on vidsrc while displaying search results.
    - Updated HLS Downloader: Skip non-downloadable subtitles for Movies/Series.

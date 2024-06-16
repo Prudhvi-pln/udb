@@ -507,10 +507,15 @@ if __name__ == '__main__':
     finally:
         # Auto-start a new UDB instance
         if skip_restart: exit(0)
-        continuation_prompt = colprint('user_input', '\nReady for one more? Reload UDB (y|n)? ', input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
-        if continuation_prompt == 'y':
-            logger.debug('Restarting UDB session...')
-            # os.execv(sys.executable, [sys.executable, sys.argv[0]])     # use sys.argv to pass along arguments if required
-            os.system(f'{sys.executable} {sys.argv[0]}')
-        else:
-            colprint('results', "Alright, Thanks for using UDB! Come back soon for more downloads!\n")
+        try:
+            continuation_prompt = colprint('user_input', '\nReady for one more? Reload UDB (y|n)? ', input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
+            if continuation_prompt == 'y':
+                logger.debug('Restarting UDB session...')
+                # os.execv(sys.executable, [sys.executable, sys.argv[0]])           # use sys.argv to pass along arguments if required
+                os.system(f'{sys.executable} {sys.argv[0]} -c {config_file}')       # use same config file
+            else:
+                colprint('results', "Alright, Thanks for using UDB! Come back soon for more downloads!\n")
+
+        except KeyboardInterrupt:
+            logger.error('User interrupted')
+            exit(0)

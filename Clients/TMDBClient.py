@@ -24,6 +24,8 @@ class TMDBClient(BaseClient):
         meta = {}
         soup = self._get_bsoup(link)
         # self.logger.debug(f'bsoup response for {link = }: {soup}')
+        if soup is None:
+            return None
 
         for i in soup.select(self.series_info_element):
             k = i.get_text(':', strip=True)
@@ -103,12 +105,14 @@ class TMDBClient(BaseClient):
             link = element['href']
             if link.startswith('/'):
                 link = self.base_url + link
-            item = {'title': title, 'link': link}
-            # get every search result details
-            item.update(self._get_series_info(link))
-            # add index to every search result
-            search_results[idx] = item
-            self._show_search_results(idx, item)
-            idx += 1
+            data = self._get_series_info(link)
+            if data is not None:
+                item = {'title': title, 'link': link}
+                # get every search result details
+                item.update(data)
+                # add index to every search result
+                search_results[idx] = item
+                self._show_search_results(idx, item)
+                idx += 1
 
         return search_results

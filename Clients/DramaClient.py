@@ -42,9 +42,10 @@ class DramaClient(BaseClient):
         '''
         meta = {}
         soup = self._get_bsoup(link)
-        self.logger.debug(f'bsoup response for {link = }: {soup}')
+        # self.logger.debug(f'bsoup response for {link = }: {soup}')
         if soup is None:
             return None
+
         for detail in soup.select(self.series_info_element):
             line = detail.text.strip()
             if ':' in line:
@@ -124,10 +125,11 @@ class DramaClient(BaseClient):
             link = element['href']
             if link.startswith('/'):
                 link = self.base_url + link
-            if self._get_series_info(link) is not None:
+            data = self._get_series_info(link)
+            if data is not None:
                 item = {'title': title, 'link': link}
                 # get every search result details
-                item.update(self._get_series_info(link))
+                item.update(data)
                 item['year'] = item['Release year']
                 # add index to every search result
                 search_results[idx] = item
