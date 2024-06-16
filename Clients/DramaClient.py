@@ -42,7 +42,9 @@ class DramaClient(BaseClient):
         '''
         meta = {}
         soup = self._get_bsoup(link)
-        # self.logger.debug(f'bsoup response for {link = }: {soup}')
+        self.logger.debug(f'bsoup response for {link = }: {soup}')
+        if soup is None:
+            return None
         for detail in soup.select(self.series_info_element):
             line = detail.text.strip()
             if ':' in line:
@@ -115,20 +117,22 @@ class DramaClient(BaseClient):
 
         idx = 1
         search_results = {}
+        item = {}
         # get matched items. Limit the search results to be displayed.
         for element in soup.select(self.search_link_element)[:search_limit]:
             title = element.text
             link = element['href']
             if link.startswith('/'):
                 link = self.base_url + link
-            item = {'title': title, 'link': link}
-            # get every search result details
-            item.update(self._get_series_info(link))
-            item['year'] = item['Release year']
-            # add index to every search result
-            search_results[idx] = item
-            self._show_search_results(idx, item)
-            idx += 1
+            if self._get_series_info(link) is not None:
+                item = {'title': title, 'link': link}
+                # get every search result details
+                item.update(self._get_series_info(link))
+                item['year'] = item['Release year']
+                # add index to every search result
+                search_results[idx] = item
+                self._show_search_results(idx, item)
+                idx += 1
 
         return search_results
 
