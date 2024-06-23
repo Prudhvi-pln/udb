@@ -166,13 +166,18 @@ class VidSrcClient(BaseClient):
                 self.logger.debug(f'Processing {episode = }')
 
                 sources = self._get_sources_ids(episode.get('episodeId'))
+                # There is a change in vidplay source id as on Jun-22, 2024.
+                # Retained the previous source id for backward compatibility.
                 vidplay_src_id = sources.get('Vidplay')
+                if vidplay_src_id is None:
+                    self.logger.debug('Vidplay source id not found. Checking for new source F2Cloud')
+                    vidplay_src_id = sources.get('F2Cloud')
 
                 if vidplay_src_id:
                     vidplay_src_url = self.vidplay_source_url.format(vidplay_id=vidplay_src_id)
                     link = self.vpc._get_vidplay_link(vidplay_src_url, self.VIDSRC_KEY)
                 else:
-                    self.logger.warning('Vidplay source id not found in sources')
+                    self.logger.warning('Vidplay/F2Cloud source id not found in sources')
                     link = None
 
                 if link is not None:

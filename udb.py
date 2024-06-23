@@ -17,6 +17,7 @@ def get_client():
     # add hls_size_accuracy parameter passed from cli
     config[series_type].update({'hls_size_accuracy': hls_size_accuracy})
     __base_url = config[series_type].get('base_url', '').lower()
+    # Load required Client based on user selection, to avoid unnecessary imports
     if 'anime' in series_type.lower():
         if 'animepahe' in __base_url:
             logger.debug('Creating Anime Client for AnimePahe site')
@@ -30,10 +31,17 @@ def get_client():
         logger.debug('Creating Drama Client')
         from Clients.DramaClient import DramaClient
         return DramaClient(config[series_type])
-    else:
-        logger.debug('Creating Movies/TV-Shows Client')
+    elif 'vidsrc' in series_type.lower():
+        logger.debug('Creating Movies/TV-Shows Vidsrc Client')
         from Clients.VidSrcClient import VidSrcClient
         return VidSrcClient(config[series_type])
+    elif 'superembed' in series_type.lower():
+        logger.debug('Creating Movies/TV-Shows Superembed Client')
+        from Clients.SuperembedClient import SuperembedClient
+        return SuperembedClient(config[series_type])
+    else:
+        logger.error(f'Unknown series type: {series_type}')
+        raise ExitException(1)
 
 def get_os_safe_path(tmp_path):
     '''Returns OS corrected path'''
@@ -396,7 +404,7 @@ if __name__ == '__main__':
 
         if len(episodes) == 0:
             logger.error('No episodes found in selected series!')
-            raise 
+            raise ExitException(1)
 
         logger.info(f'Displaying episodes list')
         client.show_episode_results(episodes, seasons_predef, episodes_predef)

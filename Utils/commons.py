@@ -34,7 +34,9 @@ strip_ansi = lambda text: re.sub(r'\x1b\[[0-9;]*m', '', text)
 
 class ExitException(Exception):
     '''
-    Custom exception which forces UDB to exit
+    Custom exception which forces UDB to exit. Requires status code as argument.
+    - =0 means direct exit without prompting for new session.
+    - >0 prompts for new session.
     '''
     pass
 

@@ -61,7 +61,7 @@ class TMDBClient(BaseClient):
                 s_cnt = sum('season' in k.lower() for k in season_ep_cnts.keys())
                 e_cnt = sum(int(v) for k,v in season_ep_cnts.items() if 'season' in k.lower())
                 if s_cnt != 0 or e_cnt != 0:
-                    meta['seasons'], meta['episodes'] = s_cnt, e_cnt
+                    meta['seasons'], meta['episodes'], meta['episodes_per_season'] = s_cnt, e_cnt, season_ep_cnts
 
             except:
                 pass

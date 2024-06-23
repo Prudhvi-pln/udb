@@ -58,7 +58,7 @@ DownloaderConfig:
   max_parallel_downloads: 2
 
 LoggerConfig:
-  log_level: DEBUG
+  log_level: INFO
   log_dir: log
   log_file_name: udb.log
   max_log_size_in_kb: 100
