@@ -2,7 +2,6 @@ __author__ = 'Prudhvi PLN'
 
 import json
 import os
-import re
 import jsbeautifier as js
 from urllib.parse import quote_plus
 
@@ -10,7 +9,6 @@ from urllib.parse import quote_plus
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from time import sleep
-import undetected_chromedriver as uc
 
 from Clients.BaseClient import BaseClient
 
@@ -38,53 +36,7 @@ class AnimePaheClient(BaseClient):
         Extract new cookies required for authentication to By-pass DDoS protection.
         Returns a dictionary of cookies
         '''
-        def __suppress_exception_in_del(uc):
-            '''
-            Suppress the exception saying "OSError: [WinError 6] The handle is invalid"
-            '''
-            old_del = uc.Chrome.__del__
-
-            def new_del(self) -> None:
-                try:
-                    old_del(self)
-                except:
-                    pass
-            
-            setattr(uc.Chrome, '__del__', new_del)
-
-        def __get_chrome_version(chrome_path):
-            '''
-            Get the Chrome version dynamically
-            '''
-            if '\\' in chrome_path:     # = Windows OS
-                is_match = lambda word: re.search('\d+\.\d+\.\d+\.\d+', word)
-                get_version = lambda path: [ is_match(d).group(0) for d in os.listdir(os.path.dirname(path)) if is_match(d) ][0]
-                version = get_version(chrome_path)
-            else:                       # = Linux OS
-                version = self._exec_cmd(f'{chrome_path} --version').strip('Google Chrome ').strip()
-
-            return int(version.split('.')[0])
-
-        self.logger.debug('Suppressing exit exception in Chrome driver')
-        __suppress_exception_in_del(uc)
-
-        # check if chrome is installed
-        self.logger.debug('Checking if Chrome is installed')
-        chrome_path = uc.find_chrome_executable()
-        if chrome_path is None or chrome_path == '':
-            self.logger.error('AnimePahe requires a chrome browser to be installed. Unable to proceed further!')
-            self._exit(0)
-
-        # dynamically fetch the chrome version
-        self.logger.debug('Dynamically fetching the installed Chrome version')
-        try:
-            main_version = __get_chrome_version(chrome_path)
-            self.logger.debug(f'Current chrome version: {main_version}')
-        except Exception as e:
-            self.logger.error(f'Failed to fetch Chrome version. Error: {e}')
-            self._exit(0)
-
-        driver = uc.Chrome(headless=True, version_main=main_version)
+        driver = self._get_undetected_chrome_driver(client='AnimePaheClient')
         driver.get(url)
 
         retry_cnt = 1
@@ -104,6 +56,7 @@ class AnimePaheClient(BaseClient):
         else:
             self.logger.debug('Site loaded successfully! Extracting cookies...')
             all_cookies = driver.get_cookies()
+            driver.close()
             driver.quit()
 
         cookies = {}
@@ -229,7 +182,7 @@ class AnimePaheClient(BaseClient):
         return response as text of kwik link
         '''
         referer_link = self.udb_episode_dict[ep_no]['episodeLink']
-        response = self._send_request(kwik_link, referer_link)
+        response = self._send_request(kwik_link, referer=referer_link)
 
         return response
 
@@ -241,10 +194,9 @@ class AnimePaheClient(BaseClient):
         # if below logic is still failing, then execute the javascript code from html response
         # use either selenium in headless or use online compiler api (ex: https://onecompiler.com/javascript)
         # print(text)
-        _regex_extract = lambda rgx, txt, grp: re.search(rgx, txt).group(grp) if re.search(rgx, txt) else False
 
         self.logger.debug('Extracting javascript code')
-        js_code = _regex_extract(";eval\(.*\)", text, 0)
+        js_code = self._regex_extract(";eval\(.*\)", text, 0)
         if not js_code:
             raise Exception('m3u8 link extraction failed. js code not found')
 
@@ -255,7 +207,7 @@ class AnimePaheClient(BaseClient):
             raise Exception('m3u8 link extraction failed. Unable to execute js')
 
         self.logger.debug('Extracting m3u8 links')
-        parsed_link = _regex_extract('http.*.m3u8', parsed_js_code, 0)
+        parsed_link = self._regex_extract('http.*.m3u8', parsed_js_code, 0)
         if not parsed_link:
             raise Exception('m3u8 link extraction failed. link not found')
 

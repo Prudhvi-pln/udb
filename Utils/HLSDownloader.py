@@ -76,7 +76,7 @@ class HLSDownloader(BaseDownloader):
         seg_temp_dir = self.temp_dir.replace('\\', '\\\\')
         # ffmpeg doesn't accept backward slash in key file irrespective of platform
         key_temp_dir = self.temp_dir.replace('\\', '/')
-        with open(self.m3u8_file, "w") as m3u8_f:
+        with open(self.m3u8_file, 'w', encoding='utf-8') as m3u8_f:
             m3u8_content = re.sub('URI=(.*)/', f'URI="{key_temp_dir}/', m3u8_data, count=1)
             regex_safe = '\\\\' if os.sep == '\\' else '/'
             # strip off url for segments

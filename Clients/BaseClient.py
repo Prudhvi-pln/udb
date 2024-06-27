@@ -4,12 +4,17 @@ import json
 import logging
 import re
 import requests
+import os
 from bs4 import BeautifulSoup as BS
+from copy import deepcopy
 from urllib.parse import parse_qs, urlparse
 
 # modules for encryption
 import base64
 from Cryptodome.Cipher import AES
+
+# modules to bypass DDoS protection & Complex Javascript execution
+import undetected_chromedriver as uc
 
 from Utils.commons import colprint, exec_os_cmd, pretty_time, retry, threaded, ExitException
 
@@ -38,6 +43,8 @@ class BaseClient():
         self.bs = AES.block_size
         # get the root logger
         self.logger = logging.getLogger()
+        # re-usable lambda functions
+        self._regex_extract = lambda rgx, txt, grp: re.search(rgx, txt).group(grp) if re.search(rgx, txt) else False
 
     def _update_udb_dict(self, parent_key, child_dict):
         if parent_key in self.udb_episode_dict:
@@ -65,7 +72,7 @@ class BaseClient():
         raise ExitException(code)
 
     @retry()
-    def _send_request(self, url, referer=None, extra_headers=None, cookies={}, return_type='text', silent=False):
+    def _send_request(self, url, referer=None, request_type='get', extra_headers=None, cookies={}, return_type='text', post_data={}, silent=False):
         '''
         call response session and return response
 
@@ -80,12 +87,15 @@ class BaseClient():
                 self.logger.error(message)
 
         # print(f'{self.req_session}: {url}')
-        header = self.header
+        header = deepcopy(self.header)
         if referer: header.update({'referer': referer})
-        if return_type.lower() == 'json': header.update({'accept': 'application/json'})
+        if return_type.lower() == 'json': header.update({'Accept': 'application/json'})
         if extra_headers: header.update(extra_headers)
         # self.logger.debug(f'Cookies before request: {self.req_session.cookies.get_dict()}')
-        response = self.req_session.get(url, timeout=self.request_timeout, headers=header, cookies=cookies)
+        if request_type == 'get':
+            response = self.req_session.get(url, timeout=self.request_timeout, headers=header, cookies=cookies)
+        elif request_type == 'post':
+            response = self.req_session.post(url, timeout=self.request_timeout, headers=header, cookies=cookies, data=post_data)
         # self.logger.debug(f'Cookies after request: {self.req_session.cookies.get_dict()}')
         # print(response)
 
@@ -115,11 +125,11 @@ class BaseClient():
         else:
             _conditional_logger(silent, f'Failed with code: {response.status_code}')
 
-    def _get_bsoup(self, search_url, referer=None, extra_headers=None, cookies={}, silent=False):
+    def _get_bsoup(self, search_url, referer=None, request_type='get', extra_headers=None, cookies={}, post_data={}, silent=False):
         '''
         return html parsed soup
         '''
-        html_content = self._send_request(search_url, referer, extra_headers, cookies, 'text', silent)
+        html_content = self._send_request(search_url, referer=referer, request_type=request_type, extra_headers=extra_headers, cookies=cookies, return_type='text', post_data=post_data, silent=silent)
         if html_content is not None:
             return BS(html_content, 'html.parser')
 
@@ -163,7 +173,7 @@ class BaseClient():
         m3u8_links = {}
         base_url = '/'.join(master_m3u8_link.split('/')[:-1])
         self.logger.debug(f'Extracting m3u8 data from master link: {master_m3u8_link}')
-        master_m3u8_data = self._send_request(master_m3u8_link, referer)
+        master_m3u8_data = self._send_request(master_m3u8_link, referer=referer)
         # self.logger.debug(f'{master_m3u8_data = }')
 
         _regex_list = lambda data, rgx, grp: [ url.group(grp) for url in re.finditer(rgx, data) ]
@@ -355,7 +365,7 @@ class BaseClient():
         try:
             # get encrpyted response with download links
             self.logger.debug(f'Fetch download links from encrypted url')
-            encrypted_response = self._send_request(dl_sources_link, link, {'x-requested-with': 'XMLHttpRequest'}, return_type='json')['data']
+            encrypted_response = self._send_request(dl_sources_link, referer=link, extra_headers={'x-requested-with': 'XMLHttpRequest'}, return_type='json')['data']
             self.logger.debug(f'{encrypted_response = }')
 
             # decode the response
@@ -645,3 +655,56 @@ class BaseClient():
 
         else:
             return None
+
+    def _get_undetected_chrome_driver(self, client):
+        '''
+        Get the undetected chrome driver based on installed Chrome broswer available.
+        Args: client - name of the client (used for logging only)
+        '''
+        def __suppress_exception_in_del(uc):
+            '''
+            Suppress the exception saying "OSError: [WinError 6] The handle is invalid"
+            '''
+            old_del = uc.Chrome.__del__
+
+            def new_del(self) -> None:
+                try:
+                    old_del(self)
+                except:
+                    pass
+            
+            setattr(uc.Chrome, '__del__', new_del)
+
+        def __get_chrome_version(chrome_path):
+            '''
+            Get the Chrome version dynamically
+            '''
+            if '\\' in chrome_path:     # = Windows OS
+                is_match = lambda word: re.search('\d+\.\d+\.\d+\.\d+', word)
+                get_version = lambda path: [ is_match(d).group(0) for d in os.listdir(os.path.dirname(path)) if is_match(d) ][0]
+                version = get_version(chrome_path)
+            else:                       # = Linux OS
+                version = self._exec_cmd(f'{chrome_path} --version').strip('Google Chrome ').strip()
+
+            return int(version.split('.')[0])
+
+        self.logger.debug('Suppressing exit exception in Chrome driver')
+        __suppress_exception_in_del(uc)
+
+        # check if chrome is installed
+        self.logger.debug('Checking if Chrome is installed')
+        chrome_path = uc.find_chrome_executable()
+        if chrome_path is None or chrome_path == '':
+            self.logger.error(f'{client} requires a chrome browser to be installed. Unable to proceed further!')
+            self._exit(0)
+
+        # dynamically fetch the chrome version
+        self.logger.debug('Dynamically fetching the installed Chrome version')
+        try:
+            main_version = __get_chrome_version(chrome_path)
+            self.logger.debug(f'Current chrome version: {main_version}')
+        except Exception as e:
+            self.logger.error(f'Failed to fetch Chrome version. Error: {e}')
+            self._exit(0)
+
+        return uc.Chrome(headless=True, version_main=main_version)

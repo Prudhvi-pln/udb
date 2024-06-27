@@ -1,6 +1,9 @@
 ## Changelog
- - Version 2.12.5 [2024-06-23]
-   - Fix #20: Change in Vidplay source id
+ - Version 2.13.0 [2024-06-27]
+   - Feature #15: Added new Superembed Client for Movies & TV Shows.
+   - Recursive approach to fetch vidsrc keys for faster updates. Now looks at PRs as well.
+   - Fix #20: Change in Vidplay source id.
+   - Many other performance tweaks under the hood.
 
  - Version 2.12.4 [2024-06-16]
    - Fix #18: Page not found during search results

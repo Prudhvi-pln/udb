@@ -160,7 +160,7 @@ class DramaClient(BaseClient):
             more_ep_link = self.episodes_list_url.format(series_name=series, pg_no=pg_no)
 
             self.logger.debug(f'Fetching more episodes for {series = } from {pg_no = }. URL: {more_ep_link}')
-            soup = self._get_bsoup(more_ep_link, series_link, {'x-requested-with': 'XMLHttpRequest'})
+            soup = self._get_bsoup(more_ep_link, referer=series_link, extra_headers={'x-requested-with': 'XMLHttpRequest'})
             all_episodes_list.extend(self._get_episodes_list(soup, True))
 
         return all_episodes_list[::-1]   # return episodes in ascending

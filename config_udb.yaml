@@ -43,7 +43,19 @@ Movies & TV Shows (Vidsrc):
     vidplay_source_url: ajax/embed/source/{vidplay_id}
   Vidplay:
     base_url: https://vidplay.online
-    keys_url: https://github.com/Ciarands/vidsrc-keys/blob/main/keys.json
+    keys_url: https://github.com/Ciarands/vidsrc-keys/blob/{commit_id}/keys.json
+  download_dir: C:\Users\HP\Downloads\Video
+  request_timeout: 30
+  alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
+  preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
+  blacklist_urls:                             # avoid below urls while fetching download links
+
+Movies & TV Shows (Superembed):
+  TMDB:
+    base_url: https://www.themoviedb.org/
+    search_url: search?query=
+  Superembed:
+    base_url: https://multiembed.mov/?tmdb=1&video_id={tmdb_id}
   download_dir: C:\Users\HP\Downloads\Video
   request_timeout: 30
   alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]

@@ -118,7 +118,7 @@ class VidSrcClient(BaseClient):
                 })
                 all_episodes_list.append(episode_dict)
 
-        return sorted(all_episodes_list, key=lambda x: (x.get('season'), x['episode']))     # sort by seasons if exists and episodes
+        return sorted(all_episodes_list, key=lambda x: (x.get('season'), x['episode']))     # sort by seasons (if exists) and episodes
 
     # step-3
     def show_episode_results(self, items, *predefined_range):
@@ -190,10 +190,10 @@ class VidSrcClient(BaseClient):
                     self.logger.debug(f'Extracting m3u8 links for {link = }')
                     # get download sources
                     m3u8_links = self.vpc._resolve_sources(link)
-                    # get subtitles dictionary (key:value = language:link) and add to udb dict
-                    subtitles = self.vpc._get_vidplay_subtitles(link.split('?')[1])
-                    self._update_udb_dict(udb_item_key, {'subtitles': subtitles})
                     if 'error' not in m3u8_links:
+                        # get subtitles dictionary (key:value = language:link) and add to udb dict
+                        subtitles = self.vpc._get_vidplay_subtitles(link.split('?')[1])
+                        self._update_udb_dict(udb_item_key, {'subtitles': subtitles})
                         # get actual download links
                         m3u8_links = self._get_download_links(m3u8_links, link, self.preferred_urls, self.blacklist_urls)
                     self.logger.debug(f'Extracted {m3u8_links = }')
