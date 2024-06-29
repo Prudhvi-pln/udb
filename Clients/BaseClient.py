@@ -38,6 +38,7 @@ class BaseClient():
             "Connection": "keep-alive"
         }
         self.udb_episode_dict = {}   # dict containing all details of epsiodes
+        self.cookies_file = os.path.join(os.path.dirname(__file__), '.udb_client_cookies.json')      # file containing re-usable cookies
         # list of invalid characters not allowed in windows file system
         self.invalid_chars = ['/', '\\', '"', ':', '?', '|', '<', '>', '*']
         self.bs = AES.block_size
@@ -149,6 +150,38 @@ class BaseClient():
             value = f'{val}'
 
         return value
+
+    def _load_udb_cookies(self, client):
+        self.logger.debug('Reloading saved cookies...')
+
+        if os.path.isfile(self.cookies_file):
+            self.logger.debug(f'Last loaded cookies file found [{self.cookies_file}]. Reloading cookies...')
+            # Reload last saved cookies
+            with open(self.cookies_file) as f:
+                cookies = json.loads(f.read())
+
+            if client in cookies:
+                self.logger.debug(f'Cookies loaded from file: {cookies[client]}')
+                return cookies[client]
+            else:
+                self.logger.debug(f'No Cookies found for {client}! Loading new cookies...')
+
+        else:
+            self.logger.debug(f'Last loaded cookies file not found [{self.cookies_file}]. Loading new cookies...')
+
+        return {}
+
+    def _save_udb_cookies(self, client, data):
+        self.logger.debug(f'Saving extracted new cookies to file: {data}')
+        # Save the new cookies to file
+        if os.path.isfile(self.cookies_file):
+            with open(self.cookies_file) as f:
+                cookies = json.loads(f.read())
+        else:
+            cookies = {}
+        cookies[client] = data
+        with open(self.cookies_file, 'w') as f:
+            json.dump(cookies, f)
 
     # step-4.1 -- used in GogoAnime, MyAsianTV
     def _get_stream_link(self, link, stream_links_element):
@@ -708,3 +741,11 @@ class BaseClient():
             self._exit(0)
 
         return uc.Chrome(headless=True, version_main=main_version)
+
+    # step-7
+    def cleanup(self):
+        '''
+        Perform any clean-up activities as required.
+        '''
+        # Override this method with custom implementation in respective client
+        pass

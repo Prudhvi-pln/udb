@@ -16,6 +16,10 @@ class VidPlayClient(BaseClient):
         self.keys_url = config['keys_url']
         super().__init__(config['request_timeout'], session)
         self.logger.debug(f'VidPlay client initialized with {config = }')
+        # Format the keys url to make it dynamic for using PRs. Replace main branch with {commit_id}
+        self.default_commit_id = self.keys_url.split('/')[-2]
+        self.keys_url = '/'.join(self.keys_url.split('/')[:-2] + ['{commit_id}', self.keys_url.split('/')[-1]])
+        self.logger.debug(f'Using generalized keys_url = {self.keys_url}, commit_id = {self.default_commit_id}')
 
     # step-4.2
     def _get_vidplay_link(self, vidplay_src_url, vidsrc_key):
@@ -179,8 +183,8 @@ class VidPlayClient(BaseClient):
         '''
         self.logger.debug(f'Start resolving sources using recursive approach')
 
-        # Resolving resources. Use main branch first
-        response = self._resolve_sources_inner(url, commit_id='main')
+        # Resolving resources. Use default branch first
+        response = self._resolve_sources_inner(url, commit_id=self.default_commit_id)
         if not ('error' in response and 'vidsrc keys' in response.get('error')):
             return response
 

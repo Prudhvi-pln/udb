@@ -8,8 +8,8 @@ import traceback
 
 # Note: For optimization, custom modules are imported as required
 from Utils.commons import colprint_init, colprint, PRINT_THEMES, ExitException
-from Utils.commons import get_current_version, check_for_updates, update_udb
 from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, threaded
+from Utils.commons import VersionManager
 
 
 def get_client():
@@ -301,8 +301,11 @@ def batch_downloader(download_fn, links, dl_config, max_parallel_downloads):
 
 if __name__ == '__main__':
     try:
+        # Initialize required variables
+        client = None
         skip_restart = False
-        __version__ = get_current_version()
+        version_mngr = VersionManager()
+        __version__ = version_mngr.current_version
 
         # parse cli arguments
         parser = argparse.ArgumentParser(description='UDB Client to download entire anime / drama in one-shot.')
@@ -339,29 +342,26 @@ if __name__ == '__main__':
         # initialize color printer
         colprint_init(disable_colors)
 
-        # display current version
-        if display_version:
-            colprint('yellow', f'{os.path.basename(__file__)} v{__version__}')
+        # Get update status
+        status_code, status_message = version_mngr.update_status
 
-        # check for latest version
-        status_code, status_message = check_for_updates(__version__)
+        # display current version
+        if display_version or update_flag:
+            colprint('yellow', f'{os.path.basename(__file__)} v{__version__}')
 
         # update udb to latest version if exists
         if update_flag:
-            if status_code != 0:
-                update_udb()
-                __version__ = get_current_version()     # reload the version
-                status_message = f'UDB updated to version {__version__}'
-
-            colprint('header', status_message)
-            raise ExitException(0)
+            version_mngr.update_udb()
 
         if status_code == 1:
             colprint('blinking', status_message)
         elif status_code == 2:
             colprint('error', status_message)
 
-        if display_version: raise ExitException(0)     # display updates information and exit
+        # display updates information and exit
+        if display_version:
+            version_mngr.display_changelog()
+            raise ExitException(0)
 
         # load config from yaml to dict using yaml
         config = load_yaml(config_file)
@@ -513,6 +513,8 @@ if __name__ == '__main__':
         logger.warning(f'Stacktrace: {traceback.format_exc()}')
 
     finally:
+        # Perform any cleanup tasks
+        if client: client.cleanup()
         # Auto-start a new UDB instance
         if skip_restart: exit(0)
         try:

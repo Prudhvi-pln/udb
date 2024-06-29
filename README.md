@@ -102,6 +102,7 @@ I would like to express my gratitude to the creators and developers of the open-
  - [animdl](https://github.com/justfoolingaround/animdl)
  - [dra-cla](https://github.com/CoolnsX/dra-cla/blob/main/dra-cla)
  - [vidsrc-to-resolver](https://github.com/Ciarands/vidsrc-to-resolver)
+ - [vidplay-keys](https://github.com/KillerDogeEmpire/vidplay-keys)
  - [m3u8downloader](https://github.com/josephcappadona/m3u8downloader)
 
 ## Known issues

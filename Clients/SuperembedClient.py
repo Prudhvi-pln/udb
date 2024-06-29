@@ -35,6 +35,8 @@ class SuperembedClient(BaseClient):
         self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
         super().__init__(config['request_timeout'], session)
         self.logger.debug(f'Superembed client initialized with {config = }')
+        self.driver = None
+        self.button_token = {}      # placeholder for reusable token
 
     # step-3.1
     def get_season_ep_ranges(self, episodes):
@@ -53,12 +55,19 @@ class SuperembedClient(BaseClient):
 
         return ranges
 
-    # step-4.1
+    # step-4.1.1.1
     # TODO: Currently, this function retrieves the token using selenium to execute javascript code. Need to reverse engineer the javascript code.
-    def _get_button_click_token(self, sb_url):
+    def _get_new_button_click_token(self, sb_url):
         '''
-        extract the button-click token used to retrieve load_sources token
+        Extract a new button-click token used to retrieve load_sources token
         '''
+        # Creating webdriver instance, if does not exist
+        if not self.driver:
+            self.logger.debug('Creating webdriver instance')
+            self.driver = self._get_undetected_chrome_driver(client='Superembed')
+        else:
+            self.logger.debug('Reusing webdriver instance')
+
         self.logger.debug(f'Extracting button-click token from streambucket url: {sb_url}')
         self.driver.get(sb_url)
 
@@ -89,22 +98,51 @@ class SuperembedClient(BaseClient):
         button_token = hidden_input.get_attribute('value').strip()
         self.logger.debug(f"Extracted streambucket button-click token: {button_token}")
 
-        return button_token
+        return {'button-click': button_token}
 
-    # step-4.2
-    def _get_load_sources_token(self, sb_url, button_token):
+    # step-4.1.1
+    def _get_button_click_token(self, sb_url):
+        '''
+        Extract the button-click token used to retrieve load_sources token
+        '''
+        self.logger.debug('Extracting streambucket button-click token...')
+        btn_token = self._load_udb_cookies(client='superembed')
+        if btn_token:
+            return btn_token
+
+        # Load new cookies
+        btn_token = self._get_new_button_click_token(sb_url)
+        self._save_udb_cookies(client='superembed', data=btn_token)
+
+        return btn_token
+
+    # step-4.1
+    def _get_load_sources_token(self, sb_url, retry=False):
         '''
         extract the token used to retrieve the available sources
         '''
         # Extract the load sources token using button-click token from above
         self.logger.debug(f'Extracting load sources token from streambucket url: {sb_url}')
-        resp = self._send_request(sb_url, request_type='post', post_data={'button-click': button_token})
+
+        resp = self._send_request(sb_url, request_type='post', post_data=self.button_token)
         token = self._regex_extract('load_sources\("(.*)"\);', resp, 1)
         self.logger.debug(f'Extracted load sources token: {token}')
 
-        return token if token else None
+        if token: return token
 
-    # step-4.3
+        if retry:
+            self.logger.warning(f'No load_sources token found!')
+            return None
+        elif self.driver is None:
+            # Retry only if 1st attempt is done using reloaded cookies
+            self.logger.debug('Retrying to extract load source token...')
+            self.button_token = self._get_new_button_click_token(sb_url)
+            # Save the newly loaded cookies
+            self._save_udb_cookies(client='superembed', data=self.button_token)
+            token = self._get_load_sources_token(sb_url, retry=True)
+            return token
+
+    # step-4.2
     def _extract_stream_link(self, load_sources_token, source='vipstream'):
         '''
         extract stream source link for given source. Default is vipstream
@@ -125,20 +163,18 @@ class SuperembedClient(BaseClient):
 
         # Construct the link to fetch stream source link
         sb_playvideo_url = self.episode_base_url + self.get_stream_source_link.format(video_id=video_id, server_id=server_id, load_sources_token=load_sources_token)
-        self.logger.debug(f'Extracting stream source using: {sb_playvideo_url}')
-        soup = self._get_bsoup(sb_playvideo_url)
-        if soup:
+        try:
+            self.logger.debug(f'Extracting stream source using: {sb_playvideo_url}')
+            soup = self._get_bsoup(sb_playvideo_url)
             self.logger.debug('Extracting stream source link')
             stream_link = soup.select_one('iframe').get('src')
-
-        if stream_link:
             self.logger.debug(f'Extracted stream source link for source [{source}]: {stream_link}')
-        else:
-            self.logger.warning(f'Failed to extract stream source link for source: {source}')
+        except Exception as e:
+            self.logger.error(f'Failed to extract stream source link for source: {source}. Error: {e}')
 
         return stream_link
 
-    # step-4.4.1
+    # step-4.3.1
     def _decode_hunter(self, h, u, n, t, e, r):
         '''
         python implementation of javascript's hunter function
@@ -176,7 +212,7 @@ class SuperembedClient(BaseClient):
 
         return result
 
-    # step-4.4
+    # step-4.3
     def _resolve_vipstream_source(self, stream_link):
         '''
         extract m3u8 link & subtitles dict from vipstream source link
@@ -204,7 +240,7 @@ class SuperembedClient(BaseClient):
         subs = [ i.group(1) for i in re.finditer('subtitle:"([^"]+)"', decoded_data) ]
         for _subs in subs:
             for sub in _subs.split(','):
-                lang, url = sub.split(']')
+                lang, url = sub.rsplit(']', 1)
                 subtitles[lang.strip('[')] = url
         self.logger.debug(f'Extracted m3u8 & subtitle links: {m3u8_links = }, {subtitles = }')
 
@@ -296,57 +332,44 @@ class SuperembedClient(BaseClient):
         series_flag, display_prefix = (True, 'Episode') if episodes[0]['type'] == 'tv' else (False, 'Movie')
         prev_season = None
 
-        # Creating webdriver instance to re-use for faster loading
-        self.logger.debug('Creating webdriver instance')
-        self.driver = self._get_undetected_chrome_driver(client='Superembed')
+        for episode in episodes:
+            # self.logger.debug(f'Current {episode = }')
+            season_no, ep_no = episode.get('season'), float(episode.get('episode'))
+            if series_flag and season_no in ep_ranges:
+                ep_start, ep_end, specific_eps = ep_ranges[season_no].get('start', 0), ep_ranges[season_no].get('end', 0), ep_ranges[season_no].get('specific_no', [])
+                if prev_season != season_no:
+                    self._colprint('results', f"-------------- Season: {season_no} --------------")
+                    prev_season = season_no
+            else:
+                ep_start, ep_end, specific_eps = ep_ranges.get('start', 0), ep_ranges.get('end', 0), ep_ranges.get('specific_no', [])
 
-        try:
-            # Since webdriver is used, there is a need to ensure it is closed in case of any exception
-            for episode in episodes:
-                # self.logger.debug(f'Current {episode = }')
-                season_no, ep_no = episode.get('season'), float(episode.get('episode'))
-                if series_flag and season_no in ep_ranges:
-                    ep_start, ep_end, specific_eps = ep_ranges[season_no].get('start', 0), ep_ranges[season_no].get('end', 0), ep_ranges[season_no].get('specific_no', [])
-                    if prev_season != season_no:
-                        self._colprint('results', f"-------------- Season: {season_no} --------------")
-                        prev_season = season_no
-                else:
-                    ep_start, ep_end, specific_eps = ep_ranges.get('start', 0), ep_ranges.get('end', 0), ep_ranges.get('specific_no', [])
+            if (ep_no >= ep_start and ep_no <= ep_end) or (ep_no in specific_eps):
+                self.logger.debug(f'Processing {episode = }')
 
-                if (ep_no >= ep_start and ep_no <= ep_end) or (ep_no in specific_eps):
-                    self.logger.debug(f'Processing {episode = }')
+                self.episode_base_url = '/'.join(episode.get('streambucketLink').split('/')[:3])
+                # One-time load button-click token
+                if not self.button_token: self.button_token = self._get_button_click_token(episode.get('streambucketLink'))
+                load_sources_token = self._get_load_sources_token(episode.get('streambucketLink'))
+                link = self._extract_stream_link(load_sources_token, source='vipstream')
 
-                    self.episode_base_url = '/'.join(episode.get('streambucketLink').split('/')[:3])
-                    button_click_token = self._get_button_click_token(episode.get('streambucketLink'))
-                    load_sources_token = self._get_load_sources_token(episode.get('streambucketLink'), button_click_token)
-                    link = self._extract_stream_link(load_sources_token, source='vipstream')
+                if link is not None:
+                    # udb key format: s + SEASON + e + EPISODE / m + MOVIE
+                    udb_item_key = f"s{episode.get('season')}e{episode.get('episode')}" if series_flag else f"m{episode.get('episode')}"
+                    # add episode details & vidplay link to udb dict
+                    self._update_udb_dict(udb_item_key, episode)
+                    self._update_udb_dict(udb_item_key, {'streamLink': link, 'refererLink': link})
 
-                    if link is not None:
-                        # udb key format: s + SEASON + e + EPISODE / m + MOVIE
-                        udb_item_key = f"s{episode.get('season')}e{episode.get('episode')}" if series_flag else f"m{episode.get('episode')}"
-                        # add episode details & vidplay link to udb dict
-                        self._update_udb_dict(udb_item_key, episode)
-                        self._update_udb_dict(udb_item_key, {'streamLink': link, 'refererLink': link})
+                    self.logger.debug(f'Extracting m3u8 links for {link = }')
+                    # get download sources & subtitles dictionary (key:value = language:link) and add to udb dict
+                    m3u8_links, subtitles = self._resolve_vipstream_source(link)
+                    if subtitles: self._update_udb_dict(udb_item_key, {'subtitles': subtitles})
+                    if 'error' not in m3u8_links:
+                        # get actual download links
+                        m3u8_links = self._get_download_links(m3u8_links, link, self.preferred_urls, self.blacklist_urls)
+                    self.logger.debug(f'Extracted {m3u8_links = }')
 
-                        self.logger.debug(f'Extracting m3u8 links for {link = }')
-                        # get download sources & subtitles dictionary (key:value = language:link) and add to udb dict
-                        m3u8_links, subtitles = self._resolve_vipstream_source(link)
-                        if subtitles: self._update_udb_dict(udb_item_key, {'subtitles': subtitles})
-                        if 'error' not in m3u8_links:
-                            # get actual download links
-                            m3u8_links = self._get_download_links(m3u8_links, link, self.preferred_urls, self.blacklist_urls)
-                        self.logger.debug(f'Extracted {m3u8_links = }')
-
-                        download_links[udb_item_key] = m3u8_links
-                        self._show_episode_links(episode.get('episode'), m3u8_links, display_prefix)
-
-        except Exception as e:
-            raise Exception(e)          # propagate the exception as-is
-
-        finally:
-            self.logger.debug('Closing the webdriver instance')
-            self.driver.close()
-            self.driver.quit()
+                    download_links[udb_item_key] = m3u8_links
+                    self._show_episode_links(episode.get('episode'), m3u8_links, display_prefix)
 
         return download_links
 
@@ -357,3 +380,14 @@ class SuperembedClient(BaseClient):
         target_dir = f"{show_title} ({target_series['year']})"
 
         return target_dir, None
+
+    # step-7
+    def cleanup(self):
+        '''
+        Perform any clean-up activities as required.
+        '''
+        # Close driver at the end, so that we can reuse.
+        if self.driver:
+            self.logger.debug('Closing the webdriver instance')
+            self.driver.close()
+            self.driver.quit()

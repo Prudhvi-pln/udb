@@ -31,6 +31,8 @@ DISPLAY_COLORS = True
 
 # strip ANSI characters, to write to log file
 strip_ansi = lambda text: re.sub(r'\x1b\[[0-9;]*m', '', text)
+# parse semantic version string
+parse_version = lambda version: tuple(map(int, (version.split('.') + ['0', '0'])[:3]))
 
 class ExitException(Exception):
     '''
@@ -40,33 +42,102 @@ class ExitException(Exception):
     '''
     pass
 
-def get_current_version():
+class VersionManager():
     '''
-    Returns the current version of UDB
+    VersionManager to handle version checks and updates to UDB
     '''
-    with open(os.path.join(os.path.dirname(__file__), 'version.txt'), 'r') as f:
-        current_version = f.read().strip()
+    def __init__(self):
+        self.parse_version = lambda version: tuple(map(int, (version.split('.') + ['0', '0'])[:3]))
+        self.current_version = self.get_current_version()
+        self.latest_changelog = self.get_latest_changelog()
+        if self.latest_changelog:
+            self.latest_version = next(iter(self.latest_changelog.keys()))
+            self.update_status = self.check_for_updates()
 
-    return current_version
+    def _convert_md_to_json(self, data):
+        cl = {}
+        version = None
+        for i in data:
+            if i.startswith('## Version'):
+                version = i.split()[2]
+                cl[version] = []
+            elif i.strip().startswith('-'):
+                cl[version].append(i.strip())
+        return cl
 
-def check_for_updates(current_version):
-    '''
-    Check for the latest UDB version. Uses `version.txt` from GitHub Repo.
-    Returns:
-    - status code: 0=INFO, 1=WARN, 2=ERROR
-    - status message
-    '''
-    # get latest version from GitHub
-    try:
-        latest_version = requests.get('https://github.com/Prudhvi-pln/udb/blob/main/Utils/version.txt', headers={'accept': 'application/json'}).json()['payload']['blob']['rawLines'][0]
-    except Exception as e:
-        return (2, f'ERROR: Unable to retrieve latest version information from Git')
+    def get_current_version(self):
+        '''
+        Returns the current version of UDB. Fetches current version from the local CHANGELOG.md
+        '''
+        with open(os.path.join(os.path.dirname(__file__), '..', 'CHANGELOG.md'), 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.strip().startswith('## Version'):
+                    current_version = line.strip().split()[2]
+                    break       # read the first version and break, to avoid loading entire file
 
-    # compare the versions
-    if current_version != latest_version:
-        return (1, f'WARNING: Latest version {latest_version} available. Consider upgrading to the latest version by running: python udb.py --update')
-    else:
-        return (0, f'Current version {current_version} is already the latest')
+        return current_version
+
+    def get_latest_changelog(self):
+        '''
+        Retrieve the latest CHANGELOG from the GitHub repo and returns as a json
+        '''
+        latest_changelog = {}
+        try:
+            response = requests.get('https://github.com/Prudhvi-pln/udb/blob/main/CHANGELOG.md?plain=1', headers={'Accept': 'application/json'}).json()['payload']['blob']['rawLines']
+            latest_changelog = self._convert_md_to_json(response)
+        except Exception as e:
+            pass
+
+        return latest_changelog
+
+    def check_for_updates(self):
+        '''
+        Check for the latest UDB version. Uses `CHANGELOG.md` from GitHub Repo.
+        Returns:
+        - status code: 0=INFO, 1=WARN, 2=ERROR
+        - status message
+        '''
+        if not self.latest_changelog:
+            return (2, f'ERROR: Unable to retrieve latest version information from Git')
+
+        # compare the versions
+        if self.parse_version(self.latest_version) > self.parse_version(self.current_version):
+            return (1, f'WARNING: Latest version {self.latest_version} available. Consider upgrading to the latest version by running: python udb.py --update')
+        else:
+            return (0, f'Current version {self.current_version} is already the latest')
+
+    def display_changelog(self):
+        '''
+        Display the changelog for available latest versions
+        '''
+        if self.update_status[0] != 1: return
+        colprint('header', '\nChangelog:')
+        for version in self.latest_changelog:
+            if self.parse_version(version) >= self.parse_version(self.current_version):
+                colprint('success', version)
+                print('\n'.join(self.latest_changelog[version]))
+
+    def update_udb(self):
+        '''
+        Update UDB to the latest version available from Git
+        '''
+        if self.update_status[0] == 1:
+            # Show changelog before updating
+            self.display_changelog()
+            # Get confirmation to update
+            proceed = colprint('user_input', f'\nUpdate UDB to latest version [{self.latest_version}] (y|n)? ', input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
+            if proceed != 'y':
+                raise ExitException(0)
+            colprint('predefined', 'Updating UDB to the latest version...')
+            try:
+                print(exec_os_cmd('git pull'))
+                colprint('header', f'UDB updated to version {self.latest_version}')
+            except Exception as e:
+                colprint('error', f'Failed to update UDB:\n{e}')
+        elif self.update_status[0] == 0:
+            colprint('header', self.update_status[1])
+
+        raise ExitException(0)
 
 def exec_os_cmd(cmd):
     '''
@@ -82,16 +153,6 @@ def exec_os_cmd(cmd):
     if rc != 0:
         raise Exception(f"Error occured: {std_err}")
     return msg
-
-def update_udb():
-    '''
-    Update UDB to the latest version available from Git
-    '''
-    colprint('predefined', 'Updating UDB to the latest version...')
-    try:
-        print(exec_os_cmd('git pull'))
-    except Exception as e:
-        colprint('error', f'Failed to update UDB:\n{e}')
 
 # display seconds in hh mm ss format
 def pretty_time(sec: int, fmt='hh:mm:ss'):

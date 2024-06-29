@@ -43,7 +43,7 @@ Movies & TV Shows (Vidsrc):
     vidplay_source_url: ajax/embed/source/{vidplay_id}
   Vidplay:
     base_url: https://vidplay.online
-    keys_url: https://github.com/Ciarands/vidsrc-keys/blob/{commit_id}/keys.json
+    keys_url: https://github.com/KillerDogeEmpire/vidplay-keys/blob/keys/keys.json
   download_dir: C:\Users\HP\Downloads\Video
   request_timeout: 30
   alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]

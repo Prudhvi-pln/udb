@@ -71,15 +71,9 @@ class AnimePaheClient(BaseClient):
         Load cookies required for authentication. Required to By-pass DDoS protection.
         Returns a dictionary of cookies
         '''
-        cookies = {}
-        cookies_file = os.path.join(os.path.dirname(__file__), '.animepahe_cookies.json')
+        cookies = self._load_udb_cookies(client='animepahe')
 
-        if os.path.isfile(cookies_file):
-            self.logger.debug(f'Last loaded cookies file found [{cookies_file}]. Reloading cookies...')
-            # Reload last saved cookies
-            with open(cookies_file) as f:
-                cookies = json.loads(f.read())
-
+        if cookies:
             # Check if cookies are valid
             self.logger.debug(f'Validating reloaded cookies: {cookies}')
             resp = self._send_request(url, cookies=cookies)
@@ -88,14 +82,9 @@ class AnimePaheClient(BaseClient):
             else:
                 return cookies
 
-        else:
-            self.logger.debug(f'Last loaded cookies file not found [{cookies_file}]. Loading new cookies...')
-
+        # Load new cookies
         cookies = self._get_new_cookies(url, '/html/body/header/nav/a/img')
-        # Save the new cookies to file
-        with open(cookies_file, 'w') as f:
-            json.dump(cookies, f)
-        self.logger.debug(f'Extracted new cookies and saved to file: {cookies}')
+        self._save_udb_cookies(client='animepahe', data=cookies)
 
         return cookies
 
