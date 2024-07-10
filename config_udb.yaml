@@ -3,7 +3,7 @@ Anime (Gogoanime):
   search_url: search.html?keyword=
   episodes_list_url: ajax/load-list-episode?ep_start={ep_start}&ep_end={ep_end}&id=
   download_fetch_link: encrypt-ajax.php
-  download_dir: D:\Anime
+  download_dir: C:\Users\rumal\Documents\New folder\udb
   request_timeout: 30
   alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
   preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
@@ -15,7 +15,7 @@ Anime (Animepahe):
   episodes_list_url: api?m=release&sort=episode_asc&id=
   download_link_url: api?m=links&p=kwik&id=
   episode_url: play/{anime_id}/{episode_id}
-  download_dir: D:\Anime
+  download_dir: C:\Users\rumal\Documents\New folder\udb
   request_timeout: 30
   alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
 
@@ -44,7 +44,7 @@ Movies & TV Shows (Vidsrc):
   Vidplay:
     base_url: https://vidplay.online
     keys_url: https://github.com/KillerDogeEmpire/vidplay-keys/blob/keys/keys.json
-  download_dir: C:\Users\HP\Downloads\Video
+  download_dir: C:\Users\rumal\Documents\New folder\udb
   request_timeout: 30
   alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
   preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
@@ -56,14 +56,14 @@ Movies & TV Shows (Superembed):
     search_url: search?query=
   Superembed:
     base_url: https://multiembed.mov/?tmdb=1&video_id={tmdb_id}
-  download_dir: C:\Users\HP\Downloads\Video
+  download_dir: C:\Users\rumal\Documents\New folder\udb
   request_timeout: 30
   alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
   preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
   blacklist_urls:                             # avoid below urls while fetching download links
 
 DownloaderConfig:
-  download_dir: C:\Users\HP\Downloads\Video   # creates a target folder with name of series under this. Uses this, if none specified above
+  download_dir: C:\Users\rumal\Documents\New folder\udb  # creates a target folder with name of series under this. Uses this, if none specified above
   temp_download_dir: auto                     # if set to auto, creates a temp location under the target folder
   concurrency_per_file: auto                  # concurrency to load segments in a m3u8 file
   request_timeout: 30

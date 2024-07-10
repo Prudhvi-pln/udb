@@ -6,3 +6,4 @@ __pycache__
 *.log*
 *.mp4
 Clients/*.json
+config_udb.yaml
