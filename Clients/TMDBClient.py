@@ -9,8 +9,8 @@ class TMDBClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
-        self.base_url = config['base_url']
-        self.search_url = self.base_url + config['search_url']
+        self.base_url = config.get('base_url', 'https://www.themoviedb.org/')
+        self.search_url = self.base_url + config.get('search_url', 'search?query=')
         self.search_link_element = config.get('search_link_element', '.details a.result')
         self.series_info_element = config.get('series_info_element', 'section.facts p')
         super().__init__(config['request_timeout'], session)

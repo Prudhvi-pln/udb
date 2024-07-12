@@ -12,16 +12,16 @@ class DramaClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
-        self.base_url = config['base_url']
-        self.search_url = self.base_url + config['search_url']
-        self.episodes_list_url = self.base_url + config['episodes_list_url']
+        self.base_url = config.get('base_url', 'https://myasiantv.ac/')
+        self.search_url = self.base_url + config.get('search_url', 'search.html?key=')
+        self.episodes_list_url = self.base_url + config.get('episodes_list_url', 'ajax/episode-list/{series_name}/{pg_no}.html?page={pg_no}')
         self.search_link_element = config.get('search_link_element', 'ul.items li h2 a')
         self.series_info_element = config.get('series_info_element', 'div.left p')
         self.episode_link_element = config.get('episode_link_element', 'ul.list-episode li h2 a')
         self.episode_sub_type_element = config.get('episode_sub_type_element', 'ul.list-episode li img')
         self.episode_upload_time_element = config.get('episode_upload_time_element', 'ul.list-episode li span')
         self.stream_links_element = config.get('stream_links_element', 'div.anime_muti_link div')
-        self.download_fetch_link = config['download_fetch_link']
+        self.download_fetch_link = config.get('download_fetch_link', 'encrypt-ajax.php')
         self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
         self.blacklist_urls = config['blacklist_urls'] if config['blacklist_urls'] else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
@@ -52,7 +52,11 @@ class DramaClient(BaseClient):
                 meta[line.split(':')[0].strip()] = line.split(':')[1].strip().split('\n')[0]
 
         # get last episode number
-        last_ep_no = soup.select_one(self.episode_link_element).text.strip().split()[-1]
+        last_ep_element = soup.select_one(self.episode_link_element)
+        if last_ep_element is None:
+            return meta
+
+        last_ep_no = last_ep_element.text.strip().split()[-1]
         # if series is ongoing, get expected no of total episodes. works only for dramas where meta is available
         if meta['Status'].lower() != 'completed':
             try:
@@ -174,7 +178,7 @@ class DramaClient(BaseClient):
 
         for item in items:
             if item.get('episode') >= start and item.get('episode') <= end:
-                fmted_name = re.sub(' (\d$)', r' 0\1', item.get('episodeName'))
+                fmted_name = re.sub(r' (\d$)', r' 0\1', item.get('episodeName'))
                 self._colprint('results', f"Episode: {fmted_name} | Subs: {item.get('episodeSubs')} | Release date: {item.get('episodeUploadTime')}")
 
     # step-4

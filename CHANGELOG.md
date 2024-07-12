@@ -1,5 +1,11 @@
 # Changelog
 
+## Version 2.13.2 [2024-07-11]
+- DramaClient: Fixed search for Upcoming dramas.
+- Simplified configuration to ensure it remains static and user-specific.
+- Added support for multiple instances of UDB with seamless logging. Use cli option `-l <log-name>` for custom log file name.
+- Addressed few depreciation warnings for Python >= 3.12
+
 ## Version 2.13.1 [2024-06-29]
 - Updated Changelog. Added feature to view the changelog from UDB before updating.
 - Fix #21: Fixed bug while parsing subtitles in Superembed Client.

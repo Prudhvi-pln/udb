@@ -12,9 +12,9 @@ class GogoAnimeClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
-        self.base_url = config['base_url']
-        self.search_url = self.base_url + config['search_url']
-        self.episodes_list_url = config['episodes_list_url']
+        self.base_url = config.get('base_url', 'https://anitaku.to/')
+        self.search_url = self.base_url + config.get('search_url', 'search.html?keyword=')
+        self.episodes_list_url = config.get('episodes_list_url', 'ajax/load-list-episode?ep_start={ep_start}&ep_end={ep_end}&id=')
         self.episodes_list_id_element = config.get('episodes_list_id_element', 'div.anime_info_body input#movie_id')
         self.search_link_element = config.get('search_link_element', 'ul.items li p.name a')
         self.series_info_element = config.get('series_info_element', 'div.anime_info_body p.type')
@@ -22,7 +22,7 @@ class GogoAnimeClient(BaseClient):
         self.episode_link_element = config.get('episode_link_element', 'ul#episode_related li a')
         self.episode_sub_type_element = config.get('episode_sub_type_element', 'ul#episode_related li a div.cate')
         self.stream_links_element = config.get('stream_links_element', 'div.anime_muti_link a')
-        self.download_fetch_link = config['download_fetch_link']
+        self.download_fetch_link = config.get('download_fetch_link', 'encrypt-ajax.php')
         self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
         self.blacklist_urls = config['blacklist_urls'] if config['blacklist_urls'] else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')

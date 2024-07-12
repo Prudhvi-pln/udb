@@ -7,6 +7,7 @@ import requests
 import sys
 import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from functools import wraps
 from time import sleep
 from logging.handlers import RotatingFileHandler
@@ -323,7 +324,7 @@ class CustomLogFormatter(logging.Formatter):
 def create_logger(**logger_config):
     '''Create a logging handler
 
-    Args: logging configuration as a dictionary [Allowed keys: log_level, log_dir, log_filename, max_log_size_in_kb, log_backup_count]
+    Args: logging configuration as a dictionary [Allowed keys: log_level, log_dir, log_file_name, max_log_size_in_kb, log_backup_count]
     Returns: a logging handler'''
     # human-readable log-level to logging.* mapping
     log_levels = {
@@ -333,20 +334,6 @@ def create_logger(**logger_config):
         'ERROR': logging.ERROR
     }
 
-    # set default logging configuration
-    default_logging_config = {
-        'log_level': 'INFO',
-        'log_dir': 'log',
-        'log_filename': 'udb.log',
-        'max_log_size_in_kb': 1000,
-        'log_backup_count': 3
-    }
-
-    # update missing logging configuration with defaults
-    for key in default_logging_config.keys():
-        if key not in logger_config:
-            logger_config[key] = default_logging_config[key]
-
     # format the log entries
     file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(funcName)s:%(lineno)s - %(message)s')
     stdout_formatter = CustomLogFormatter()
@@ -355,7 +342,7 @@ def create_logger(**logger_config):
     logger.setLevel(logging.DEBUG)
 
     # create logging directory
-    if logger_config['log_dir']: os.makedirs(logger_config['log_dir'], exist_ok=True)
+    os.makedirs(logger_config.get('log_dir', 'logs'), exist_ok=True)
 
     # create logging handler for stdout
     stdout_handler = logging.StreamHandler(sys.stdout)
@@ -364,15 +351,40 @@ def create_logger(**logger_config):
 
     # add rotating file handler to rotate log file when size crosses a threshold
     file_handler = RotatingFileHandler(
-        os.path.join(logger_config['log_dir'], logger_config['log_filename']),
-        maxBytes = logger_config['max_log_size_in_kb'] * 1000,  # KB to Bytes
-        backupCount = logger_config['log_backup_count'],
+        os.path.join(logger_config.get('log_dir', 'logs'), logger_config.get('log_file_name', 'udb.log')),
+        maxBytes = logger_config.get('max_log_size_in_kb', 1000) * 1000,  # KB to Bytes
+        backupCount = logger_config.get('log_backup_count', 3),
         encoding='utf-8'
     )
     file_handler.setFormatter(file_formatter)
-    file_handler.setLevel(log_levels.get(logger_config['log_level'].upper()))
+    file_handler.setLevel(log_levels.get(logger_config.get('log_level', 'INFO').upper()))
 
     logger.addHandler(file_handler)     # print to file
     logger.addHandler(stdout_handler)   # print only error to stdout
 
     return logger
+
+# delete old log files
+def delete_old_logs(directory='logs', days_threshold=7):
+    '''
+    Delete files older than `days_threshold` days in the specified directory.
+    '''
+    logging.info(f'Deleting log files older than {days_threshold} days...')
+    ndays = datetime.now().timestamp() - days_threshold * 86400
+
+    # Get list of files to delete. If you encapsulate this in () brackets, it'll be a generator :)
+    files_to_delete = [ f for f in ( os.path.join(directory, i) for i in os.listdir(directory) ) if os.path.isfile(f) and os.stat(f).st_mtime < ndays ]
+
+    logging.info(f'Found {len(files_to_delete)} files to delete!')
+    failure_cnt = 0
+    for f in files_to_delete:
+        try:
+            logging.debug(f'Deleting file: {f}')
+            os.remove(f)
+        except:
+            failure_cnt += 1
+    
+    if failure_cnt > 0:
+        logging.error(f'Failed to delete {failure_cnt}/{len(files_to_delete)} log files older than {days_threshold} days.')
+    else:
+        logging.info(f'Deleted {len(files_to_delete)} files.')

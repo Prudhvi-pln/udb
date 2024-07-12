@@ -82,7 +82,7 @@ class HLSDownloader(BaseDownloader):
             # strip off url for segments
             m3u8_content = re.sub(r'https://(.*)/', '', m3u8_content)
             # prefix the downloaded path for segments
-            m3u8_content = re.sub(r'^(?!#).+$', f'{seg_temp_dir}{regex_safe}\g<0>', m3u8_content, flags=re.MULTILINE)
+            m3u8_content = re.sub(r'^(?!#).+$', rf'{seg_temp_dir}{regex_safe}\g<0>', m3u8_content, flags=re.MULTILINE)
             m3u8_f.write(m3u8_content)
 
     def _download_subtitles(self):

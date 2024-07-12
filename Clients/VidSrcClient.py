@@ -11,14 +11,18 @@ class VidSrcClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
+        # pad the configuration with required keys
+        config.setdefault('TMDB', {})
+        config.setdefault('Vidsrc', {})
+        config.setdefault('Vidplay', {})
         # initialize TMDB Client
         config['TMDB']['request_timeout'] = config['request_timeout']
         self.tmdb_client = TMDBClient(config['TMDB'], session)
-        vs_base_url = config['Vidsrc']['base_url']
-        self.episodes_list_url = vs_base_url + config['Vidsrc']['episodes_list_url']
+        vs_base_url = config['Vidsrc'].get('base_url', 'https://vidsrc.to/')
+        self.episodes_list_url = vs_base_url + config['Vidsrc'].get('episodes_list_url', 'embed/{type}/{tmdb_id}')
         self.episodes_list_element = config['Vidsrc'].get('episodes_list_element', '.episodes')
-        self.sources_url = vs_base_url + config['Vidsrc']['sources_url']
-        self.vidplay_source_url = vs_base_url + config['Vidsrc']['vidplay_source_url']
+        self.sources_url = vs_base_url + config['Vidsrc'].get('sources_url', 'ajax/embed/episode/{episode_id}/sources')
+        self.vidplay_source_url = vs_base_url + config['Vidsrc'].get('vidplay_source_url', 'ajax/embed/source/{vidplay_id}')
         self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
         self.blacklist_urls = config['blacklist_urls'] if config['blacklist_urls'] else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')

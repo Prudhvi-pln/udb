@@ -6,3 +6,4 @@ requests
 tqdm
 pycryptodomex
 undetected-chromedriver
+setuptools

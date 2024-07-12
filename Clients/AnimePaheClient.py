@@ -19,11 +19,11 @@ class AnimePaheClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
-        self.base_url = config['base_url']
-        self.search_url = self.base_url + config['search_url']
-        self.episodes_list_url = self.base_url + config['episodes_list_url']
-        self.download_link_url = self.base_url + config['download_link_url']
-        self.episode_url = self.base_url + config['episode_url']
+        self.base_url = config.get('base_url', 'https://animepahe.ru/')
+        self.search_url = self.base_url + config.get('search_url', 'api?m=search&q=')
+        self.episodes_list_url = self.base_url + config.get('episodes_list_url', 'api?m=release&sort=episode_asc&id=')
+        self.download_link_url = self.base_url + config.get('download_link_url', 'api?m=links&p=kwik&id=')
+        self.episode_url = self.base_url + config.get('episode_url', 'play/{anime_id}/{episode_id}')
         self.anime_id = ''      # anime id. required to create referer link
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
@@ -185,7 +185,7 @@ class AnimePaheClient(BaseClient):
         # print(text)
 
         self.logger.debug('Extracting javascript code')
-        js_code = self._regex_extract(";eval\(.*\)", text, 0)
+        js_code = self._regex_extract(r";eval\(.*\)", text, 0)
         if not js_code:
             raise Exception('m3u8 link extraction failed. js code not found')
 

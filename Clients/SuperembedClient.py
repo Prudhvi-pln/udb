@@ -17,10 +17,13 @@ class SuperembedClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
+        # pad the configuration with required keys
+        config.setdefault('TMDB', {})
         # initialize TMDB Client
         config['TMDB']['request_timeout'] = config['request_timeout']
+        config.setdefault('Superembed', {})
         self.tmdb_client = TMDBClient(config['TMDB'], session)
-        self.se_base_url = config['Superembed']['base_url']
+        self.se_base_url = config['Superembed'].get('base_url', 'https://multiembed.mov/?tmdb=1&video_id={tmdb_id}')
         self.has_streambucket_url_element = config['Superembed'].get('has_streambucket_url_element', 'div.loading-text')
         self.stream_play_element = config['Superembed'].get('stream_play_element', 'div.play-button')
         self.stream_form_element = config['Superembed'].get('stream_form_element', '.form-button-click')
@@ -61,14 +64,15 @@ class SuperembedClient(BaseClient):
         '''
         Extract a new button-click token used to retrieve load_sources token
         '''
-        # Creating webdriver instance, if does not exist
-        if not self.driver:
+        self.logger.debug(f'Extracting button-click token from streambucket url: {sb_url}')
+
+        # Creating webdriver instance, if does not exist, else reuse
+        if self.driver:
+            self.logger.debug('Reusing webdriver instance')
+        else:
             self.logger.debug('Creating webdriver instance')
             self.driver = self._get_undetected_chrome_driver(client='Superembed')
-        else:
-            self.logger.debug('Reusing webdriver instance')
 
-        self.logger.debug(f'Extracting button-click token from streambucket url: {sb_url}')
         self.driver.get(sb_url)
 
         # Wait for the page to load and the button to be clickable
@@ -125,7 +129,7 @@ class SuperembedClient(BaseClient):
         self.logger.debug(f'Extracting load sources token from streambucket url: {sb_url}')
 
         resp = self._send_request(sb_url, request_type='post', post_data=self.button_token)
-        token = self._regex_extract('load_sources\("(.*)"\);', resp, 1)
+        token = self._regex_extract(r'load_sources\("(.*)"\);', resp, 1)
         self.logger.debug(f'Extracted load sources token: {token}')
 
         if token: return token
@@ -155,8 +159,7 @@ class SuperembedClient(BaseClient):
         soup = self._get_bsoup(load_sources_url, request_type='post', post_data={'token': load_sources_token}, extra_headers={'x-requested-with': 'XMLHttpRequest'})
         selected_source = [ i for i in soup.select(self.source_list_element) if i.select(f'.server-{source}') ] if soup else []
         if len(selected_source) == 0:
-            self.logger.warning(f'Selected stream source [{source}] not found')
-            return
+            return {'error': f'Stream source [{source}] not found'}
         video_id = selected_source[0].get('data-id')
         server_id = selected_source[0].get('data-server')
         self.logger.debug(f'Extracted details for stream source [{source}]: {video_id = }, {server_id = }')
@@ -169,10 +172,10 @@ class SuperembedClient(BaseClient):
             self.logger.debug('Extracting stream source link')
             stream_link = soup.select_one('iframe').get('src')
             self.logger.debug(f'Extracted stream source link for source [{source}]: {stream_link}')
+            return stream_link
         except Exception as e:
-            self.logger.error(f'Failed to extract stream source link for source: {source}. Error: {e}')
-
-        return stream_link
+            self.logger.warning(f'Failed to fetch stream source link with error: {e}')
+            return {'error': f'Stream link not found for source: {source}'}
 
     # step-4.3.1
     def _decode_hunter(self, h, u, n, t, e, r):
@@ -286,7 +289,7 @@ class SuperembedClient(BaseClient):
                 if ep_name is None or 'not found' in ep_name.lower():
                     self.logger.error(not_found_err_msg.format(season=season, episode=episode))
                     continue        # skip if not found
-                streambucket_actual_url = self._regex_extract('btoa\("([^"]+)"\)', soup.select('script')[2].text, 1)
+                streambucket_actual_url = self._regex_extract(r'btoa\("([^"]+)"\)', soup.select('script')[2].text, 1)
                 if not streambucket_actual_url:
                     self.logger.error(no_id_err_msg.format(season=season, episode=episode))
                     continue
@@ -350,9 +353,14 @@ class SuperembedClient(BaseClient):
                 # One-time load button-click token
                 if not self.button_token: self.button_token = self._get_button_click_token(episode.get('streambucketLink'))
                 load_sources_token = self._get_load_sources_token(episode.get('streambucketLink'))
-                link = self._extract_stream_link(load_sources_token, source='vipstream')
 
-                if link is not None:
+                if load_sources_token is not None:
+                    # update udb dict with error details (if any) and move to next episode
+                    link = self._extract_stream_link(load_sources_token, source='vipstream')
+                    if 'error' in link:
+                        self._show_episode_links(episode.get('episode'), link, display_prefix)
+                        continue
+
                     # udb key format: s + SEASON + e + EPISODE / m + MOVIE
                     udb_item_key = f"s{episode.get('season')}e{episode.get('episode')}" if series_flag else f"m{episode.get('episode')}"
                     # add episode details & vidplay link to udb dict

@@ -211,7 +211,7 @@ class BaseClient():
 
         _regex_list = lambda data, rgx, grp: [ url.group(grp) for url in re.finditer(rgx, data) ]
         _full_link = lambda link: link if link.startswith('http') else base_url + '/' + link
-        resolutions = _regex_list(master_m3u8_data, 'RESOLUTION=(\d+x\d+)', 1)
+        resolutions = _regex_list(master_m3u8_data, r'RESOLUTION=(\d+x\d+)', 1)
         resolution_names = _regex_list(master_m3u8_data, 'NAME="(.*)"', 1)
         if len(resolution_names) == 0:
             resolution_names = [ res.lower().split('x')[-1] for res in resolutions ]
@@ -713,7 +713,7 @@ class BaseClient():
             Get the Chrome version dynamically
             '''
             if '\\' in chrome_path:     # = Windows OS
-                is_match = lambda word: re.search('\d+\.\d+\.\d+\.\d+', word)
+                is_match = lambda word: re.search(r'\d+\.\d+\.\d+\.\d+', word)
                 get_version = lambda path: [ is_match(d).group(0) for d in os.listdir(os.path.dirname(path)) if is_match(d) ][0]
                 version = get_version(chrome_path)
             else:                       # = Linux OS

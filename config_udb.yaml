@@ -1,77 +1,50 @@
+# [ Configuration Reference ]
+# alternate_resolution_selector: Choose the resolution preference strategy from options ['lowest,' 'highest,', 'absolute']
+# preferred_urls: List of preferred URLs for fetching download links in the order of preference. Ex: ['https://www.hls', 'https://www.fast']
+# blacklist_urls: List of URLs to avoid while fetching download links.
+
 Anime (Gogoanime):
-  base_url: https://anitaku.to/
-  search_url: search.html?keyword=
-  episodes_list_url: ajax/load-list-episode?ep_start={ep_start}&ep_end={ep_end}&id=
-  download_fetch_link: encrypt-ajax.php
   download_dir: D:\Anime
   request_timeout: 30
-  alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
-  preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
-  blacklist_urls:                             # avoid below urls while fetching download links
+  alternate_resolution_selector: 'lowest'
+  preferred_urls:
+  blacklist_urls:
 
 Anime (Animepahe):
-  base_url: https://animepahe.ru/
-  search_url: api?m=search&q=
-  episodes_list_url: api?m=release&sort=episode_asc&id=
-  download_link_url: api?m=links&p=kwik&id=
-  episode_url: play/{anime_id}/{episode_id}
   download_dir: D:\Anime
   request_timeout: 30
-  alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
+  alternate_resolution_selector: 'lowest'
 
 Drama (Myasiantv):
-  base_url: https://myasiantv.ac/
-  search_url: search.html?key=
-  episodes_list_url: ajax/episode-list/{series_name}/{pg_no}.html?page={pg_no}
-  download_fetch_link: encrypt-ajax.php
   request_timeout: 30
-  alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
-  preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
-  - https://fast
-  - https://hls
-  - https://ttcx
-  blacklist_urls:                             # avoid below urls while fetching download links
+  alternate_resolution_selector: 'lowest'
+  preferred_urls:
+  blacklist_urls:
 
 Movies & TV Shows (Vidsrc):
-  TMDB:
-    base_url: https://www.themoviedb.org/
-    search_url: search?query=
-  Vidsrc:
-    base_url: https://vidsrc.to/
-    episodes_list_url: embed/{type}/{tmdb_id}
-    sources_url: ajax/embed/episode/{episode_id}/sources
-    vidplay_source_url: ajax/embed/source/{vidplay_id}
-  Vidplay:
-    base_url: https://vidplay.online
-    keys_url: https://github.com/KillerDogeEmpire/vidplay-keys/blob/keys/keys.json
-  download_dir: C:\Users\HP\Downloads\Video
+  download_dir: D:\Entertainment\Hollywood
   request_timeout: 30
-  alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
-  preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
-  blacklist_urls:                             # avoid below urls while fetching download links
+  alternate_resolution_selector: 'lowest'
+  preferred_urls:
+  blacklist_urls:
 
 Movies & TV Shows (Superembed):
-  TMDB:
-    base_url: https://www.themoviedb.org/
-    search_url: search?query=
-  Superembed:
-    base_url: https://multiembed.mov/?tmdb=1&video_id={tmdb_id}
-  download_dir: C:\Users\HP\Downloads\Video
+  download_dir: D:\Entertainment\Hollywood
   request_timeout: 30
-  alternate_resolution_selector: 'lowest'     # strategy to choose the next available resolution. Options: [lowest, highest, absolute]
-  preferred_urls:                             # preferred urls while fetching download links. uses same order of preference
-  blacklist_urls:                             # avoid below urls while fetching download links
+  alternate_resolution_selector: 'lowest'
+  preferred_urls:
+  blacklist_urls:
 
 DownloaderConfig:
-  download_dir: C:\Users\HP\Downloads\Video   # creates a target folder with name of series under this. Uses this, if none specified above
-  temp_download_dir: auto                     # if set to auto, creates a temp location under the target folder
-  concurrency_per_file: auto                  # concurrency to load segments in a m3u8 file
+  download_dir: C:\Users\HP\Downloads\Video   # Default directory. Can override by setting this in above client-specific configuration.
+  temp_download_dir: auto                     # If set to auto, creates a temp location under the target folder
+  concurrency_per_file: auto                  # Concurrency to download segments in a m3u8 file
   request_timeout: 30
   max_parallel_downloads: 2
 
 LoggerConfig:
   log_level: INFO
-  log_dir: log
-  log_file_name: udb.log
+  log_dir: logs
   max_log_size_in_kb: 100
   log_backup_count: 3
+  log_retention_days: 7

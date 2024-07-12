@@ -12,8 +12,8 @@ class VidPlayClient(BaseClient):
     Client to extract download source links for VidPlay. Credits: https://github.com/Ciarands/vidsrc-to-resolver
     '''
     def __init__(self, config, session=None):
-        self.base_url = config['base_url']
-        self.keys_url = config['keys_url']
+        self.base_url = config.get('base_url', 'https://vidplay.online')
+        self.keys_url = config.get('keys_url', 'https://github.com/KillerDogeEmpire/vidplay-keys/blob/keys/keys.json')
         super().__init__(config['request_timeout'], session)
         self.logger.debug(f'VidPlay client initialized with {config = }')
         # Format the keys url to make it dynamic for using PRs. Replace main branch with {commit_id}

@@ -8,9 +8,11 @@ import traceback
 
 # Note: For optimization, custom modules are imported as required
 from Utils.commons import colprint_init, colprint, PRINT_THEMES, ExitException
-from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, threaded
+from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, threaded, delete_old_logs
 from Utils.commons import VersionManager
 
+
+get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
 
 def get_client():
     '''Return a client instance'''
@@ -18,15 +20,14 @@ def get_client():
     config[series_type].update({'hls_size_accuracy': hls_size_accuracy})
     __base_url = config[series_type].get('base_url', '').lower()
     # Load required Client based on user selection, to avoid unnecessary imports
-    if 'anime' in series_type.lower():
-        if 'animepahe' in __base_url:
-            logger.debug('Creating Anime Client for AnimePahe site')
-            from Clients.AnimePaheClient import AnimePaheClient
-            return AnimePaheClient(config[series_type])
-        else:
-            logger.debug('Creating Anime Client for GogoAnime site')
-            from Clients.GogoAnimeClient import GogoAnimeClient
-            return GogoAnimeClient(config[series_type])
+    if 'animepahe' in series_type.lower():
+        logger.debug('Creating Anime Client for AnimePahe site')
+        from Clients.AnimePaheClient import AnimePaheClient
+        return AnimePaheClient(config[series_type])
+    elif 'gogoanime' in series_type.lower():
+        logger.debug('Creating Anime Client for GogoAnime site')
+        from Clients.GogoAnimeClient import GogoAnimeClient
+        return GogoAnimeClient(config[series_type])
     elif 'drama' in series_type.lower():
         logger.debug('Creating Drama Client')
         from Clients.DramaClient import DramaClient
@@ -220,7 +221,6 @@ def downloader(ep_details, dl_config):
     skipped_clr = PRINT_THEMES['predefined'] if not disable_colors else ''
     reset_clr = PRINT_THEMES['reset'] if not disable_colors else ''
 
-    get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
     start = get_current_time()
     start_epoch = int(time())
 
@@ -308,9 +308,10 @@ if __name__ == '__main__':
         __version__ = version_mngr.current_version
 
         # parse cli arguments
-        parser = argparse.ArgumentParser(description='UDB Client to download entire anime / drama in one-shot.')
+        parser = argparse.ArgumentParser(description='UDB Client to download anime / drama / movies / series in one-shot.')
         parser.add_argument('-c', '--conf', default='config_udb.yaml',
                             help='configuration file for UDB client (default: config_udb.yaml)')
+        parser.add_argument('-l', '--log-file', help='custom file name for logging (default: udb_{YYYYMMDDHHMMSS}.log)')
         parser.add_argument('-v', '--version', default=False, action='store_true', help='display current version of UDB')
         parser.add_argument('-s', '--series-type', type=int, help='type of series')
         parser.add_argument('-n', '--series-name', help='name of the series to search')
@@ -326,6 +327,9 @@ if __name__ == '__main__':
 
         args = parser.parse_args()
         config_file = args.conf
+        log_file_name = args.log_file
+        # set the log_file_name
+        if log_file_name is None: log_file_name = f"udb_{get_current_time('%Y%m%d%H%M%S')}.log"
         display_version = args.version
         series_type_predef = args.series_type
         series_name_predef = args.series_name
@@ -369,10 +373,15 @@ if __name__ == '__main__':
         max_parallel_downloads = downloader_config['max_parallel_downloads']
 
         # create logger
+        config['LoggerConfig']['log_file_name'] = log_file_name
+        # print(f'Current log: {log_file_name}')
         logger = create_logger(**config['LoggerConfig'])
         logger.info(f'-------------------------------- NEW UDB INSTANCE v{__version__} --------------------------------')
 
         logger.info(f'CLI options: {args}')
+
+        # remove older log files
+        delete_old_logs(config['LoggerConfig']['log_dir'], config['LoggerConfig'].get('log_retention_days', 7))
 
         # get series type
         series_type = get_series_type(config.keys(), series_type_predef)
@@ -501,6 +510,10 @@ if __name__ == '__main__':
         logger.info(f'Invoking batch downloader with {max_parallel_downloads = }')
         batch_downloader(downloader, target_dl_links, downloader_config, max_parallel_downloads)
 
+    except SystemExit as se:
+        # propagate the exit from argparse after printing help or on parse error
+        skip_restart = True
+
     except KeyboardInterrupt as ki:
         logger.error('User interrupted')
 
@@ -522,7 +535,7 @@ if __name__ == '__main__':
             if continuation_prompt == 'y':
                 logger.debug('Restarting UDB session...')
                 # os.execv(sys.executable, [sys.executable, sys.argv[0]])           # use sys.argv to pass along arguments if required
-                os.system(f'{sys.executable} {sys.argv[0]} -c {config_file}')       # use same config file
+                os.system(f'{sys.executable} {sys.argv[0]} -c {config_file} -l {log_file_name}')       # use same config & log files
             else:
                 colprint('results', "Alright, Thanks for using UDB! Come back soon for more downloads!\n")
 
