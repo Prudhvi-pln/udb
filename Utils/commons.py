@@ -354,7 +354,8 @@ def create_logger(**logger_config):
         os.path.join(logger_config.get('log_dir', 'logs'), logger_config.get('log_file_name', 'udb.log')),
         maxBytes = logger_config.get('max_log_size_in_kb', 1000) * 1000,  # KB to Bytes
         backupCount = logger_config.get('log_backup_count', 3),
-        encoding='utf-8'
+        encoding='utf-8',
+        delay=True
     )
     file_handler.setFormatter(file_formatter)
     file_handler.setLevel(log_levels.get(logger_config.get('log_level', 'INFO').upper()))
