@@ -44,7 +44,7 @@ class DramaClient(BaseClient):
         soup = self._get_bsoup(link)
         # self.logger.debug(f'bsoup response for {link = }: {soup}')
         if soup is None:
-            return None
+            return meta
 
         for detail in soup.select(self.series_info_element):
             line = detail.text.strip()
@@ -122,23 +122,25 @@ class DramaClient(BaseClient):
 
         idx = 1
         search_results = {}
-        item = {}
         # get matched items. Limit the search results to be displayed.
         for element in soup.select(self.search_link_element)[:search_limit]:
             title = element.text
             link = element['href']
             if link.startswith('/'):
                 link = self.base_url + link
+
+            # Add mandatory information
+            item = {'title': title, 'link': link}
+
+            # Add additional information
             data = self._get_series_info(link)
-            if data is not None:
-                item = {'title': title, 'link': link}
-                # get every search result details
-                item.update(data)
-                item['year'] = item['Release year']
-                # add index to every search result
-                search_results[idx] = item
-                self._show_search_results(idx, item)
-                idx += 1
+            item.update(data)
+            item['year'] = item.get('Release year', 'XXXX')
+
+            # Add index to every search result
+            search_results[idx] = item
+            self._show_search_results(idx, item)
+            idx += 1
 
         return search_results
 
@@ -229,6 +231,6 @@ class DramaClient(BaseClient):
     def set_out_names(self, target_series):
         drama_title = self._windows_safe_string(target_series['title'])
         # set target output dir
-        target_dir = drama_title if drama_title.endswith(')') else f"{drama_title} ({target_series['Release year']})"
+        target_dir = drama_title if drama_title.endswith(')') else f"{drama_title} ({target_series['year']})"
 
         return target_dir, None

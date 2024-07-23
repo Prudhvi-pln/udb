@@ -73,7 +73,7 @@ class BaseClient():
         raise ExitException(code)
 
     @retry()
-    def _send_request(self, url, referer=None, request_type='get', extra_headers=None, cookies={}, return_type='text', post_data={}, silent=False):
+    def _send_request(self, url, referer=None, request_type='get', extra_headers=None, cookies={}, return_type='text', post_data=None, upload_data=None, silent=False):
         '''
         call response session and return response
 
@@ -96,7 +96,7 @@ class BaseClient():
         if request_type == 'get':
             response = self.req_session.get(url, timeout=self.request_timeout, headers=header, cookies=cookies)
         elif request_type == 'post':
-            response = self.req_session.post(url, timeout=self.request_timeout, headers=header, cookies=cookies, data=post_data)
+            response = self.req_session.post(url, timeout=self.request_timeout, headers=header, cookies=cookies, data=post_data, files=upload_data)
         # self.logger.debug(f'Cookies after request: {self.req_session.cookies.get_dict()}')
         # print(response)
 
@@ -126,11 +126,11 @@ class BaseClient():
         else:
             _conditional_logger(silent, f'Failed with code: {response.status_code}')
 
-    def _get_bsoup(self, search_url, referer=None, request_type='get', extra_headers=None, cookies={}, post_data={}, silent=False):
+    def _get_bsoup(self, search_url, referer=None, request_type='get', extra_headers=None, cookies={}, post_data=None, upload_data=None, silent=False):
         '''
         return html parsed soup
         '''
-        html_content = self._send_request(search_url, referer=referer, request_type=request_type, extra_headers=extra_headers, cookies=cookies, return_type='text', post_data=post_data, silent=silent)
+        html_content = self._send_request(search_url, referer=referer, request_type=request_type, extra_headers=extra_headers, cookies=cookies, return_type='text', post_data=post_data, upload_data=upload_data, silent=silent)
         if html_content is not None:
             return BS(html_content, 'html.parser')
 

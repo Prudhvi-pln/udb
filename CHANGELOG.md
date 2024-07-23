@@ -1,5 +1,10 @@
 # Changelog
 
+## Version 2.13.3 [2024-07-21]
+- IMDBClient: Introduced a new search client using IMDB. The default search remains TMDB, but IMDB will be used as a fallback when TMDB is unreachable.
+- SuperembedClient: Improved speed when loading episodes of a selected series.
+- SuperembedClient: [BETA] Fix captcha issues. _This is not a stable feature_.
+
 ## Version 2.13.2 [2024-07-11]
 - DramaClient: Fixed search for Upcoming dramas.
 - Simplified configuration to ensure it remains static and user-specific.

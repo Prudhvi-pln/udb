@@ -253,7 +253,7 @@ def downloader(ep_details, dl_config):
 
     logger.info(f'Download started for {out_file}...')
 
-    if os.path.isfile(os.path.join(f'{out_dir}', f'{out_file}')):
+    if os.path.isfile(os.path.join(f'{out_dir}', f'{out_file}')) and os.path.getsize(os.path.join(f'{out_dir}', f'{out_file}')) > 0:
         # skip file if already exists
         return f'{skipped_clr}[{start}] Download skipped for {out_file}. File already exists!{reset_clr}'
     else:
@@ -298,6 +298,14 @@ def batch_downloader(download_fn, links, dl_config, max_parallel_downloads):
     logger.info(strip_ansi(status_str))
     colprint('header', '\u2500' * width)
 
+def close_handlers():
+    '''
+    Close handlers properly to ensure rotation works without issues
+    '''
+    for handler in logger.handlers:
+        handler.close()
+        logger.removeHandler(handler)
+
 
 if __name__ == '__main__':
     try:
@@ -329,7 +337,10 @@ if __name__ == '__main__':
         config_file = args.conf
         log_file_name = args.log_file
         # set the log_file_name
-        if log_file_name is None: log_file_name = f"udb_{get_current_time('%Y%m%d%H%M%S')}.log"
+        if log_file_name is None:
+            log_file_name = f"udb_{get_current_time('%Y%m%d%H%M%S')}.log"
+        elif not log_file_name.endswith('.log'):
+            log_file_name = f'{log_file_name}.log'
         display_version = args.version
         series_type_predef = args.series_type
         series_name_predef = args.series_name
@@ -381,7 +392,7 @@ if __name__ == '__main__':
         logger.info(f'CLI options: {args}')
 
         # remove older log files
-        delete_old_logs(config['LoggerConfig']['log_dir'], config['LoggerConfig'].get('log_retention_days', 7))
+        delete_old_logs(config['LoggerConfig']['log_dir'], config['LoggerConfig'].get('log_retention_days', 7), config['LoggerConfig'].get('log_backup_count', 3))
 
         # get series type
         series_type = get_series_type(config.keys(), series_type_predef)
@@ -528,17 +539,18 @@ if __name__ == '__main__':
     finally:
         # Perform any cleanup tasks
         if client: client.cleanup()
+        # Ensure to close handlers at the end of the script or before rotating
+        close_handlers()
         # Auto-start a new UDB instance
         if skip_restart: exit(0)
         try:
             continuation_prompt = colprint('user_input', '\nReady for one more? Reload UDB (y|n)? ', input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
             if continuation_prompt == 'y':
-                logger.debug('Restarting UDB session...')
                 # os.execv(sys.executable, [sys.executable, sys.argv[0]])           # use sys.argv to pass along arguments if required
                 os.system(f'{sys.executable} {sys.argv[0]} -c {config_file} -l {log_file_name}')       # use same config & log files
             else:
                 colprint('results', "Alright, Thanks for using UDB! Come back soon for more downloads!\n")
 
         except KeyboardInterrupt:
-            logger.error('User interrupted')
+            # logger.error('User interrupted')
             exit(0)

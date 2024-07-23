@@ -8,21 +8,20 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from Clients.BaseClient import BaseClient
+from Clients.IMDBClient import IMDBClient
 from Clients.TMDBClient import TMDBClient
+from Utils.commons import threaded
 
 
 class SuperembedClient(BaseClient):
     '''
-    Movies/Series Client using TheMovieDB & Superembed APIs
+    Movies/Series Client using TheMovieDB/IMDB & Superembed APIs
     '''
     # step-0
     def __init__(self, config, session=None):
+        preferred_search = config.get('preferred_search', '')
         # pad the configuration with required keys
-        config.setdefault('TMDB', {})
-        # initialize TMDB Client
-        config['TMDB']['request_timeout'] = config['request_timeout']
         config.setdefault('Superembed', {})
-        self.tmdb_client = TMDBClient(config['TMDB'], session)
         self.se_base_url = config['Superembed'].get('base_url', 'https://multiembed.mov/?tmdb=1&video_id={tmdb_id}')
         self.has_streambucket_url_element = config['Superembed'].get('has_streambucket_url_element', 'div.loading-text')
         self.stream_play_element = config['Superembed'].get('stream_play_element', 'div.play-button')
@@ -32,14 +31,65 @@ class SuperembedClient(BaseClient):
         # Hard-coding these url paths for now. If there is an issue in future, make these dynamic by extracting them from main.js
         self.load_sources_link = config['Superembed'].get('load_sources_link', '/response.php')
         self.get_stream_source_link = config['Superembed'].get('get_stream_source_link', '/playvideo.php?video_id={video_id}&server_id={server_id}&token={load_sources_token}&init=0')
+
+        # Config related to captcha
+        self.captcha_message_element = config['Superembed'].get('captcha_message_element', '#captcha-message')
+        self.captcha_element = config['Superembed'].get('captcha_element', 'div.captcha-holder')
+        self.captcha_solver = config['Superembed'].get('captcha_solver', 'https://www.nyckel.com/v1/functions/5m8hktimwukzpb8r/invoke')
         self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
         self.blacklist_urls = config['blacklist_urls'] if config['blacklist_urls'] else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
         super().__init__(config['request_timeout'], session)
+
+        # Initialize Search Client based on configuration
+        config.setdefault('TMDB', {})
+        config.setdefault('IMDB', {})
+        config['TMDB']['request_timeout'] = config['request_timeout']
+        config['IMDB']['request_timeout'] = config['request_timeout']
+        if preferred_search.upper() == 'TMDB':
+            self.search_client = TMDBClient(config['TMDB'], session)
+        elif preferred_search.upper() == 'IMDB':
+            self.search_client = IMDBClient(config['IMDB'], session)
+        else:
+            # If none specified, initialize Search Client based on reachability.
+            # Prefer TMDB first, as IMDB changes a lot. Had to create IMDB client, because TMDB is blocked is certain networks.
+            if TMDBClient.is_reachable():
+                self.search_client = TMDBClient(config['TMDB'], session)
+            else:
+                self.logger.error('TMDB is not reachable. Using IMDB instead.')
+                self.search_client = IMDBClient(config['IMDB'], session)
+
         self.logger.debug(f'Superembed client initialized with {config = }')
         self.driver = None
         self.button_token = {}      # placeholder for reusable token
+
+    # step-2.1
+    @threaded()
+    def _get_episode_details(self, episode, season, streambucket_base_url, series_type):
+
+        streambucket_url = streambucket_base_url.format(season=season, episode=episode)
+        soup = self._get_bsoup(streambucket_url, silent=True)
+
+        # Check if episode is present in Superembed catalog
+        ep_name = soup.select(self.has_streambucket_url_element)[0].get_text(' - ', strip=True) if soup else None
+        if ep_name is None or 'not found' in ep_name.lower():
+            return {'error': 1, 'episode': episode}
+
+        # Check if Streambucket ID is available
+        streambucket_actual_url = self._regex_extract(r'btoa\("([^"]+)"\)', soup.select('script')[2].text, 1)
+        if not streambucket_actual_url:
+            return {'error': 2, 'episode': episode}
+
+        episode_dict = {
+            'type': series_type,
+            'season': season,
+            'episode': episode,
+            'episodeName': self._windows_safe_string(ep_name),
+            'streambucketLink': streambucket_actual_url
+        }
+
+        return episode_dict
 
     # step-3.1
     def get_season_ep_ranges(self, episodes):
@@ -146,6 +196,57 @@ class SuperembedClient(BaseClient):
             token = self._get_load_sources_token(sb_url, retry=True)
             return token
 
+    # step-4.2.1
+    def _solve_captcha(self, sb_pv_url, captcha_element, captcha_type, attempt=1):
+        '''
+        [BETA] Solve Gender-identification Captcha in Superembed. Works as of July 20, 2024.
+        '''
+        self.logger.debug(f'[Attempt: {attempt}] Solving captcha [type={captcha_type}]...')
+        if captcha_type.lower() not in ('male', 'female'):
+            self.logger.warning(f'Unknown captcha type: {captcha_type}')
+            return
+
+        # Extract captcha data
+        captcha_base_url = '/'.join(sb_pv_url.split('/')[:3])
+        captcha_id = captcha_element.select_one('input[type=hidden]').get('value')
+        captcha_img_links = [ elem['src'] if elem['src'].startswith('https') else f"{captcha_base_url}/{elem['src']}" for elem in captcha_element.select('img') ]
+        self.logger.debug(f'[Attempt: {attempt}] Extracted captcha elements: {captcha_id = }, {captcha_img_links = }')
+
+        # Solve captcha. Works only if captcha is gender identification.
+        captcha_answers = []
+        for link in captcha_img_links:
+            self.logger.debug(f'[Attempt: {attempt}] Finding gender of {link}')
+            img_content = self._send_request(link, return_type='bytes', silent=True)
+            img_data = self._send_request(self.captcha_solver, request_type='post', upload_data={'file': img_content})
+            self.logger.debug(f'[Attempt: {attempt}] Gender data: {img_data}')
+            img_id = link.split('/')[-1].split('.')[0]
+            if 'woman' in img_data.lower():
+                captcha_answers.append((img_id, 'female'))
+            else:
+                captcha_answers.append((img_id, 'male'))
+        self.logger.debug(f'[Attempt: {attempt}] Captcha answers: {captcha_answers}')
+
+        # Send solved captcha
+        captcha_data = [ ('captcha_answer[]', answer) for answer, type in captcha_answers if type == captcha_type.lower() ]
+        captcha_data.append(('captcha_id', captcha_id))
+        self.logger.debug(f'[Attempt: {attempt}] Submitting captcha with data: {captcha_data}')
+        soup = self._get_bsoup(sb_pv_url, request_type='post', post_data=captcha_data)
+
+        # Validate if captcha is solved, else retry
+        self.logger.debug(f'[Attempt: {attempt}] Checking if captcha is enabled...')
+        captcha_element = soup.select_one(self.captcha_element)
+        if captcha_element:
+            self.logger.warning(f"[Attempt: {attempt}] Oops!!! It's Captcha Again!")
+            if attempt > 1:
+                self.logger.warning(f'Captcha is still enabled, even after {attempt} attempts')
+                return
+            captcha_type = soup.select_one(self.captcha_message_element).text.split()[-1]
+            soup = self._solve_captcha(sb_pv_url, captcha_element, captcha_type, attempt+1)
+        else:
+            self.logger.info(f'[Attempt: {attempt}] Yay! Captcha is solved')
+
+        return soup
+
     # step-4.2
     def _extract_stream_link(self, load_sources_token, source='vipstream'):
         '''
@@ -166,13 +267,26 @@ class SuperembedClient(BaseClient):
 
         # Construct the link to fetch stream source link
         sb_playvideo_url = self.episode_base_url + self.get_stream_source_link.format(video_id=video_id, server_id=server_id, load_sources_token=load_sources_token)
+
         try:
             self.logger.debug(f'Extracting stream source using: {sb_playvideo_url}')
             soup = self._get_bsoup(sb_playvideo_url)
+
+            # Check if captcha is enabled and solve it
+            self.logger.debug('Checking if captcha is enabled...')
+            captcha_element = soup.select_one(self.captcha_element)
+            if captcha_element:
+                self.logger.warning("Oops!!! It's Captcha")
+                captcha_type = soup.select_one(self.captcha_message_element).text.split()[-1]
+                soup = self._solve_captcha(sb_playvideo_url, captcha_element, captcha_type)
+            else:
+                self.logger.debug('Alright! Captcha is not enabled')
+
             self.logger.debug('Extracting stream source link')
             stream_link = soup.select_one('iframe').get('src')
             self.logger.debug(f'Extracted stream source link for source [{source}]: {stream_link}')
             return stream_link
+
         except Exception as e:
             self.logger.warning(f'Failed to fetch stream source link with error: {e}')
             return {'error': f'Stream link not found for source: {source}'}
@@ -254,7 +368,7 @@ class SuperembedClient(BaseClient):
         '''
         search for movie/show based on a keyword using TMDB API.
         '''
-        return self.tmdb_client.search(keyword, search_limit)
+        return self.search_client.search(keyword, search_limit)
 
     # step-2
     def fetch_episodes_list(self, target):
@@ -263,12 +377,16 @@ class SuperembedClient(BaseClient):
         '''
         # This function will only check if series / movie is available if superembed
         all_episodes_list = []
+        # Remove tmdb flag, if the id is from IMDB
+        if target['show_id'].startswith('tt'):
+            self.se_base_url = self.se_base_url.replace('tmdb=1&', '')
         streambucket_base_url = self.se_base_url.format(tmdb_id=target['show_id'])
+
         if target['type'] == 'tv':
             streambucket_base_url = streambucket_base_url + '&s={season}&e={episode}'
             # filter out special seasons
             seasons_to_fetch = { int(season.split()[-1]):int(episodes) for season, episodes in target['episodes_per_season'].items() if season.split()[-1].isdigit() }
-            # set logging messages format
+            # set message formats for logging
             debug_msg = 'Fetching superembed episode urls for season: {season}'
             not_found_err_msg = 'Season {season} Episode {episode} not found in Superembed catalog.'
             no_id_err_msg = 'Streambucket URL not found for: Season {season} Episode {episode}.'
@@ -281,26 +399,16 @@ class SuperembedClient(BaseClient):
 
         for season, episodes in seasons_to_fetch.items():
             self.logger.debug(debug_msg.format(season=season))
-            # fetch streambucket url for each episode
-            for episode in range(1, episodes+1):
-                streambucket_url = streambucket_base_url.format(season=season, episode=episode)
-                soup = self._get_bsoup(streambucket_url, silent=True)
-                ep_name = soup.select(self.has_streambucket_url_element)[0].get_text(' - ', strip=True) if soup else None
-                if ep_name is None or 'not found' in ep_name.lower():
-                    self.logger.error(not_found_err_msg.format(season=season, episode=episode))
-                    continue        # skip if not found
-                streambucket_actual_url = self._regex_extract(r'btoa\("([^"]+)"\)', soup.select('script')[2].text, 1)
-                if not streambucket_actual_url:
-                    self.logger.error(no_id_err_msg.format(season=season, episode=episode))
-                    continue
-                episode_dict = {
-                    'type': target['type'],
-                    'episode': episode,
-                    'episodeName': self._windows_safe_string(ep_name),
-                    'streambucketLink': streambucket_actual_url
-                }
-                if target['type'] == 'tv': episode_dict['season'] = season
-                all_episodes_list.append(episode_dict)
+            # multi-threaded fetch of streambucket url for each episode
+            items = [ episode for episode in range(1, episodes+1) ]
+            episode_dicts = self._get_episode_details(items, season, streambucket_base_url, target['type'])
+            for episode_dict in episode_dicts:
+                if episode_dict.get('error', 0) == 1:
+                    self.logger.error(not_found_err_msg.format(season=season, episode=episode_dict['episode']))
+                elif episode_dict.get('error', 0) == 2:
+                    self.logger.error(no_id_err_msg.format(season=season, episode=episode_dict['episode']))
+                else:
+                    all_episodes_list.append(episode_dict)
 
         return sorted(all_episodes_list, key=lambda x: (x.get('season'), x['episode']))     # sort by seasons (if exists) and episodes
 

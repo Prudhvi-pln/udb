@@ -89,6 +89,8 @@ class HLSDownloader(BaseDownloader):
         for sub_name in list(self.subtitles):
             sub_link = self.subtitles[sub_name]
             sub_file = os.path.join(self.temp_dir, sub_name.replace(' ', '_') + '_' + os.path.basename(sub_link))
+            # update the dictionary pointing to downloaded file
+            self.subtitles[sub_name] = sub_file
 
             try:
                 self.logger.debug(f'Downloading {sub_name} subtitle from {sub_link} to {sub_file}')
@@ -99,8 +101,6 @@ class HLSDownloader(BaseDownloader):
                 # download the subtitle to local
                 with open(sub_file, 'wb') as f:
                     f.write(sub_content)
-                # update the dictionary pointing to downloaded file
-                self.subtitles[sub_name] = sub_file
 
             except Exception as e:
                 self.logger.warning(f'Failed to download {sub_name} subtitle with error: {e}')
@@ -110,7 +110,7 @@ class HLSDownloader(BaseDownloader):
         # print(f'Converting {self.out_file} to mp4')
         out_file = os.path.join(f'{self.out_dir}', f'{self.out_file}')
         command = [f'ffmpeg -loglevel warning -allowed_extensions ALL -i "{self.m3u8_file}"']
-        maps = ['-map 0'] if self.subtitles else []
+        maps = ['-map 0:v -map 0:a'] if self.subtitles else []
         metadata = []
 
         # Prepare the command if subtitles are present

@@ -1,20 +1,31 @@
+import requests
 from urllib.parse import quote_plus
 
 from Clients.BaseClient import BaseClient
 
 
+BASE_URL = 'https://www.themoviedb.org/'
 class TMDBClient(BaseClient):
     '''
-    Client to search and return TMDB, IMDB ID for movies/series using TMDB API.
+    Client to search and return TMDB ID for movies/series.
     '''
     # step-0
     def __init__(self, config, session=None):
-        self.base_url = config.get('base_url', 'https://www.themoviedb.org/')
+        self.base_url = config.get('base_url', BASE_URL)
         self.search_url = self.base_url + config.get('search_url', 'search?query=')
         self.search_link_element = config.get('search_link_element', '.details a.result')
         self.series_info_element = config.get('series_info_element', 'section.facts p')
         super().__init__(config['request_timeout'], session)
         self.logger.debug(f'TMDB client initialized with {config = }')
+
+    @staticmethod
+    def is_reachable() -> bool:
+        '''Check if TMDB is reachable'''
+        try:
+            requests.get(BASE_URL, timeout=5)
+            return True
+        except:
+            return False
 
     # step-1.1
     def _get_series_info(self, link):
@@ -25,7 +36,9 @@ class TMDBClient(BaseClient):
         soup = self._get_bsoup(link)
         # self.logger.debug(f'bsoup response for {link = }: {soup}')
         if soup is None:
-            return None
+            return meta
+
+        meta['type'] = link.split('/')[-2].lower()
 
         for i in soup.select(self.series_info_element):
             k = i.get_text(':', strip=True)
@@ -40,10 +53,6 @@ class TMDBClient(BaseClient):
         except:
             pass
 
-        # add tmdb id. required to retrieve data from VidSrc
-        meta['show_id'] = link.split('?')[0].split('/')[-1].split('-')[0]
-        # add type of series: TV-show or Movie
-        meta['type'] = link.split('/')[-2].lower()
         # add count of seasons & episodes if it is a released series
         if meta['type'] == 'tv' and meta.get('year') is not None:
             try:
@@ -101,16 +110,22 @@ class TMDBClient(BaseClient):
         idx = 1
         search_results = {}
         for element in search_links:
-            title = element.text
-            link = element['href']
+            title, link = element.text, element['href']
             if link.startswith('/'):
                 link = self.base_url + link
+
+            # Add mandatory information
+            tmdb_id = link.split('?')[0].split('/')[-1].split('-')[0]
+            item = {
+                'title': title, 'link': link,
+                'show_id': tmdb_id, 'year': 'XXXX'
+            }
+
             data = self._get_series_info(link)
-            if data is not None:
-                item = {'title': title, 'link': link}
-                # get every search result details
+            if data:
+                # Add additional information
                 item.update(data)
-                # add index to every search result
+                # Add index to every search result
                 search_results[idx] = item
                 self._show_search_results(idx, item)
                 idx += 1

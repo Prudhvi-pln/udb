@@ -365,15 +365,16 @@ def create_logger(**logger_config):
     return logger
 
 # delete old log files
-def delete_old_logs(directory='logs', days_threshold=7):
+def delete_old_logs(directory='logs', days_threshold=7, max_file_count=3):
     '''
-    Delete files older than `days_threshold` days in the specified directory.
+    Delete files older than `days_threshold` days and greater than `max_file_count` in the specified directory.
     '''
-    logging.info(f'Deleting log files older than {days_threshold} days...')
+    logging.info(f'Deleting log files older than {days_threshold} days and greater than {max_file_count}...')
     ndays = datetime.now().timestamp() - days_threshold * 86400
 
     # Get list of files to delete. If you encapsulate this in () brackets, it'll be a generator :)
-    files_to_delete = [ f for f in ( os.path.join(directory, i) for i in os.listdir(directory) ) if os.path.isfile(f) and os.stat(f).st_mtime < ndays ]
+    files_with_mtime = [ (f, os.stat(f).st_mtime) for f in ( os.path.join(directory, i) for i in os.listdir(directory) ) if os.path.isfile(f) and os.stat(f).st_mtime < ndays ]
+    files_to_delete = sorted(files_with_mtime, key=lambda x: x[1])[:max_file_count]
 
     logging.info(f'Found {len(files_to_delete)} files to delete!')
     failure_cnt = 0

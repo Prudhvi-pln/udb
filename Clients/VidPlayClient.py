@@ -13,7 +13,7 @@ class VidPlayClient(BaseClient):
     '''
     def __init__(self, config, session=None):
         self.base_url = config.get('base_url', 'https://vidplay.online')
-        self.keys_url = config.get('keys_url', 'https://github.com/KillerDogeEmpire/vidplay-keys/blob/keys/keys.json')
+        self.keys_url = config.get('keys_url', 'https://github.com/Ciarands/vidsrc-keys/blob/main/keys.json')
         super().__init__(config['request_timeout'], session)
         self.logger.debug(f'VidPlay client initialized with {config = }')
         # Format the keys url to make it dynamic for using PRs. Replace main branch with {commit_id}
@@ -170,8 +170,8 @@ class VidPlayClient(BaseClient):
                 sources = req_data.get("result").get("sources")
                 self.logger.debug(f'Download sources: {sources}')
                 return sources
-            elif req_data.get("result") == 404:
-                self.logger.warning('Failed to fetch download sources with response code: 404. Probably keys expired!')
+            elif str(req_data.get("result")).startswith('40'):
+                self.logger.warning(f'Failed to fetch download sources with response code: {req_data.get("result")}. Probably keys expired!')
                 return {'error': 'Invalid vidsrc keys'}
 
         return {'error': 'No download links found'}
@@ -194,7 +194,7 @@ class VidPlayClient(BaseClient):
         keys_base_url = '/'.join(self.keys_url.split('/')[:-3])
         pull_soup = self._get_bsoup(f'{keys_base_url}/pulls', extra_headers={'Accept': 'text/html, application/xhtml+xml'}, silent=True)
 
-        available_prs = [ i['href'].split('/')[-1] for i in pull_soup.select('div a') if i.get('data-hovercard-type') == 'pull_request' ]
+        available_prs = [ i['href'].split('/')[-1] for i in pull_soup.select('div a') if i.get('data-hovercard-type') == 'pull_request' ] if pull_soup else []
         self.logger.debug(f'Available Pull Requests for Vidsrc keys: {available_prs}')
 
         for pr in available_prs:

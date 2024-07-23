@@ -1,23 +1,21 @@
 __author__ = 'Prudhvi PLN'
 
 from Clients.BaseClient import BaseClient
+from Clients.IMDBClient import IMDBClient
 from Clients.TMDBClient import TMDBClient
 from Clients.VidPlayClient import VidPlayClient
 
 
 class VidSrcClient(BaseClient):
     '''
-    Movies/Series Client using TheMovieDB & VidSrc APIs
+    Movies/Series Client using TheMovieDB/IMDB & VidSrc APIs
     '''
     # step-0
     def __init__(self, config, session=None):
+        preferred_search = config.get('preferred_search', '')
         # pad the configuration with required keys
-        config.setdefault('TMDB', {})
         config.setdefault('Vidsrc', {})
         config.setdefault('Vidplay', {})
-        # initialize TMDB Client
-        config['TMDB']['request_timeout'] = config['request_timeout']
-        self.tmdb_client = TMDBClient(config['TMDB'], session)
         vs_base_url = config['Vidsrc'].get('base_url', 'https://vidsrc.to/')
         self.episodes_list_url = vs_base_url + config['Vidsrc'].get('episodes_list_url', 'embed/{type}/{tmdb_id}')
         self.episodes_list_element = config['Vidsrc'].get('episodes_list_element', '.episodes')
@@ -28,6 +26,25 @@ class VidSrcClient(BaseClient):
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
         super().__init__(config['request_timeout'], session)
+
+        # Initialize Search Client based on configuration
+        config.setdefault('TMDB', {})
+        config.setdefault('IMDB', {})
+        config['TMDB']['request_timeout'] = config['request_timeout']
+        config['IMDB']['request_timeout'] = config['request_timeout']
+        if preferred_search.upper() == 'TMDB':
+            self.search_client = TMDBClient(config['TMDB'], session)
+        elif preferred_search.upper() == 'IMDB':
+            self.search_client = IMDBClient(config['IMDB'], session)
+        else:
+            # If none specified, initialize Search Client based on reachability.
+            # Prefer TMDB first, as IMDB changes a lot. Had to create IMDB client, because TMDB is blocked is certain networks.
+            if TMDBClient.is_reachable():
+                self.search_client = TMDBClient(config['TMDB'], session)
+            else:
+                self.logger.error('TMDB is not reachable. Using IMDB instead.')
+                self.search_client = IMDBClient(config['IMDB'], session)
+
         self.logger.debug(f'VidSrc client initialized with {config = }')
         # encryption key. Credits: https://github.com/Ciarands/vidsrc-to-resolver
         self.VIDSRC_KEY = 'WXrUARXb1aDLaZjI'
@@ -79,7 +96,7 @@ class VidSrcClient(BaseClient):
         '''
         search for movie/show based on a keyword using TMDB API.
         '''
-        return self.tmdb_client.search(keyword, search_limit)
+        return self.search_client.search(keyword, search_limit)
 
     # step-2
     def fetch_episodes_list(self, target):
