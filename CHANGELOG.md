@@ -1,6 +1,7 @@
 # Changelog
 
-## Version 2.13.3 [2024-07-21]
+## Version 2.13.4 [2024-07-26]
+- F2CloudClient: Added new client for F2Cloud (formerly Vidplay) under Vidsrc.
 - IMDBClient: Introduced a new search client using IMDB. The default search remains TMDB, but IMDB will be used as a fallback when TMDB is unreachable.
 - SuperembedClient: Improved speed when loading episodes of a selected series.
 - SuperembedClient: [BETA] Fix captcha issues. _This is not a stable feature_.

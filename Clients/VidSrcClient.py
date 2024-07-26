@@ -3,7 +3,7 @@ __author__ = 'Prudhvi PLN'
 from Clients.BaseClient import BaseClient
 from Clients.IMDBClient import IMDBClient
 from Clients.TMDBClient import TMDBClient
-from Clients.VidPlayClient import VidPlayClient
+from Clients.F2CloudClient import F2CloudClient
 
 
 class VidSrcClient(BaseClient):
@@ -15,12 +15,12 @@ class VidSrcClient(BaseClient):
         preferred_search = config.get('preferred_search', '')
         # pad the configuration with required keys
         config.setdefault('Vidsrc', {})
-        config.setdefault('Vidplay', {})
+        config.setdefault('F2Cloud', {})
         vs_base_url = config['Vidsrc'].get('base_url', 'https://vidsrc.to/')
         self.episodes_list_url = vs_base_url + config['Vidsrc'].get('episodes_list_url', 'embed/{type}/{tmdb_id}')
         self.episodes_list_element = config['Vidsrc'].get('episodes_list_element', '.episodes')
         self.sources_url = vs_base_url + config['Vidsrc'].get('sources_url', 'ajax/embed/episode/{episode_id}/sources')
-        self.vidplay_source_url = vs_base_url + config['Vidsrc'].get('vidplay_source_url', 'ajax/embed/source/{vidplay_id}')
+        self.provider_source_url = vs_base_url + config['Vidsrc'].get('provider_source_url', 'ajax/embed/source/{provider_id}')
         self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
         self.blacklist_urls = config['blacklist_urls'] if config['blacklist_urls'] else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
@@ -46,11 +46,11 @@ class VidSrcClient(BaseClient):
                 self.search_client = IMDBClient(config['IMDB'], session)
 
         self.logger.debug(f'VidSrc client initialized with {config = }')
-        # encryption key. Credits: https://github.com/Ciarands/vidsrc-to-resolver
-        self.VIDSRC_KEY = 'WXrUARXb1aDLaZjI'
-        # initialize VidPlay Client
-        config['Vidplay']['request_timeout'] = config['request_timeout']
-        self.vpc = VidPlayClient(config['Vidplay'], session)
+        # Initialize F2Cloud Client
+        config['F2Cloud']['request_timeout'] = config['request_timeout']
+        self.provider_client = F2CloudClient(config['F2Cloud'], session)
+        # Get F2Cloud's base encryption key
+        self.ENCRYPTION_KEY = self.provider_client._get_key(True, 0)
 
     # step-3.1
     def get_season_ep_ranges(self, episodes):
@@ -76,13 +76,14 @@ class VidSrcClient(BaseClient):
         '''
         sources = []
         # extract available sources
-        sources_link = self.sources_url.format(episode_id=episode_id)
+        encoded_id = self.provider_client._encode_data(self.ENCRYPTION_KEY, episode_id)
+        sources_link = self.sources_url.format(episode_id=episode_id) + '?token=' + encoded_id
         self.logger.debug(f'Fetching sources [{sources_link}]')
         resp = self._send_request(sources_link, return_type='json')
-        sources = resp['result']
+        sources = resp.get('result', {})
         self.logger.debug(f'Extracted sources: {sources}')
 
-        # extract vidplay source id from available sources
+        # extract F2Cloud source id from available sources
         try:
             sources = { src['title']: src['id'] for src in sources }
             self.logger.debug(f'Extracted source ids: {sources}')
@@ -187,33 +188,31 @@ class VidSrcClient(BaseClient):
                 self.logger.debug(f'Processing {episode = }')
 
                 sources = self._get_sources_ids(episode.get('episodeId'))
-                # There is a change in vidplay source id as on Jun-22, 2024.
+                # There is a change in F2Cloud source id as on Jun-22, 2024.
                 # Retained the previous source id for backward compatibility.
-                vidplay_src_id = sources.get('Vidplay')
-                if vidplay_src_id is None:
-                    self.logger.debug('Vidplay source id not found. Checking for new source F2Cloud')
-                    vidplay_src_id = sources.get('F2Cloud')
+                provider_src_id = sources.get('F2Cloud')
 
-                if vidplay_src_id:
-                    vidplay_src_url = self.vidplay_source_url.format(vidplay_id=vidplay_src_id)
-                    link = self.vpc._get_vidplay_link(vidplay_src_url, self.VIDSRC_KEY)
+                if provider_src_id:
+                    encoded_id = self.provider_client._encode_data(self.ENCRYPTION_KEY, provider_src_id)
+                    provider_src_url = self.provider_source_url.format(provider_id=provider_src_id) + '?token=' + encoded_id
+                    link = self.provider_client._get_f2cloud_link(provider_src_url)
                 else:
-                    self.logger.warning('Vidplay/F2Cloud source id not found in sources')
+                    self.logger.warning('F2Cloud source id not found in sources')
                     link = None
 
                 if link is not None:
                     # udb key format: s + SEASON + e + EPISODE / m + MOVIE
                     udb_item_key = f"s{episode.get('season')}e{episode.get('episode')}" if series_flag else f"m{episode.get('episode')}"
-                    # add episode details & vidplay link to udb dict
+                    # add episode details & provider link to udb dict
                     self._update_udb_dict(udb_item_key, episode)
-                    self._update_udb_dict(udb_item_key, {'vidplayLink': link, 'refererLink': link})
+                    self._update_udb_dict(udb_item_key, {'providerLink': link, 'refererLink': link})
 
                     self.logger.debug(f'Extracting m3u8 links for {link = }')
                     # get download sources
-                    m3u8_links = self.vpc._resolve_sources(link)
+                    m3u8_links = self.provider_client._resolve_sources(link)
                     if 'error' not in m3u8_links:
                         # get subtitles dictionary (key:value = language:link) and add to udb dict
-                        subtitles = self.vpc._get_vidplay_subtitles(link.split('?')[1])
+                        subtitles = self.provider_client._get_provider_subtitles(link.split('?')[1])
                         self._update_udb_dict(udb_item_key, {'subtitles': subtitles})
                         # get actual download links
                         m3u8_links = self._get_download_links(m3u8_links, link, self.preferred_urls, self.blacklist_urls)

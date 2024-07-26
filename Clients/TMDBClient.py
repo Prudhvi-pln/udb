@@ -47,7 +47,7 @@ class TMDBClient(BaseClient):
         # add additional metadata. Metadata extraction elements are hardcoded. This may change depending on TMDB website.
         try:
             meta['genre'] = ', '.join([ i.text.strip() for i in soup.select('span.genres a') ])
-            meta['score'] = soup.select_one('div.user_score_chart')['data-percent']
+            meta['score'] = soup.select_one('div.user_score_chart').get('data-percent')
             meta['year'] = soup.select_one('span.release_date').text.strip().replace('(', '').replace(')', '')
             meta['runtime'] = soup.select_one('span.runtime').text.strip()
         except:
