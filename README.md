@@ -5,6 +5,16 @@ Welcome to the UDB, the Ultimate-Download-Bot for Anime, Drama, Movies & TV Show
 ## UPDATE
 __Work in-progress to restore support for Drama and Movies/Series Clients.__
 
+## Current Status (as on 2024-10-08)
+| S.No | Category           | Website                                   | Status |
+| :--: | :----------------- | :---------------------------------------: | :----: |
+|   1  | Anime              | [GogoAnime](https://anitaku.to/)          | Active |
+|   2  | Anime              | [AnimePahe](https://animepahe.ru/)        | Active |
+|   3  | Drama              | [MyAsianTV](https://myasiantv.ac/)        | Active (VPN) |
+|   4  | Drama              | [Asianbxkiun](https://asianbxkiun.pro/)   | Active |
+|   5  | Movies & TV Shows  | [Vidsrc](https://vidsrc.to/)              | Work In-progress |
+|   6  | Movies & TV Shows  | [Superembed](https://streambucket.net/)   | Inactive |
+
 ## Insipiration
 
 It is a weekend and you found a good anime/series to binge-watch. But the effort of downloading all episodes (especially for series like One Piece 😅), the pain is unimaginable. _Ofcourse, you have an option to watch online, but what about people with poor unstable networks, or students with limited access to wifi_. So, this is created to help all such troubled souls. As Ikta Solorok once said: `Laziness is the mother of evolution`

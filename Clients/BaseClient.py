@@ -188,15 +188,17 @@ class BaseClient():
         '''
         return stream link for extracting download links
         '''
+        pad_https = lambda x: 'https:' + x if x.startswith('/') else x
         self.logger.debug(f'Extract stream link from soup for {link = }')
         soup = self._get_bsoup(link)
         # self.logger.debug(f'bsoup response for {link = }: {soup}')
         for stream in soup.select(stream_links_element):
-            if 'active' in stream.get('class'):
+            if 'iframe' in stream_links_element:
+                stream_link = stream['src']
+                return pad_https(stream_link)
+            elif 'active' in stream.get('class'):
                 stream_link = stream['data-video']
-                if stream_link.startswith('/'):
-                    stream_link = 'https:' + stream_link
-                return stream_link
+                return pad_https(stream_link)
 
     # step-4.2.2.1 -- used in GogoAnime, MyAsianTV
     def _parse_m3u8_links(self, master_m3u8_link, referer):
@@ -218,6 +220,26 @@ class BaseClient():
         resolution_links = _regex_list(master_m3u8_data, '(.*)m3u8', 0)
         self.logger.debug(f'Resolutions data: {resolutions = }, {resolution_names = }, {resolution_links = }')
 
+        if len(resolution_links) == 0:
+            # check for original keyword in the link, or if '#EXT-X-ENDLIST' in m3u8 data
+            self.logger.debug('Child resolutions not found. Checking if master link is original link')
+            master_is_child = re.search('#EXT-X-ENDLIST', master_m3u8_data)
+            if 'original' in master_m3u8_link or master_is_child:
+                self.logger.debug('master m3u8 link itself is the download link')
+                # treat is as mp4 to fetch metadata using ffprobe
+                duration, size, resolution = self._get_video_metadata(master_m3u8_link, 'mp4')
+                m3u8_links[resolution.split('x')[-1]] = {
+                    'resolution_size': resolution,
+                    'downloadLink': master_m3u8_link,
+                    'downloadType': 'hls',
+                    'duration': pretty_time(duration)
+                }
+                # get approx download size and add file size if available
+                file_size = self._get_download_size(master_m3u8_link)
+                if file_size: m3u8_links['1080'].update({'filesize': file_size})
+
+            return m3u8_links
+
         # calculate duration from any resolution, as it is same for all resolutions
         temp_link = _full_link(resolution_links[0]) if resolution_links else master_m3u8_link
         duration = pretty_time(self._get_video_metadata(temp_link, 'hls')[0])
@@ -235,22 +257,6 @@ class BaseClient():
             file_size = self._get_download_size(m3u8_link)
             if file_size: m3u8_links[_res.replace('p','')].update({'filesize': file_size})
 
-        if len(m3u8_links) == 0:
-            # check for original keyword in the link, or if '#EXT-X-ENDLIST' in m3u8 data
-            self.logger.debug('Child resolutions not found. Checking if master link is original link')
-            master_is_child = re.search('#EXT-X-ENDLIST', master_m3u8_data)
-            if 'original' in master_m3u8_link or master_is_child:
-                self.logger.debug('master m3u8 link itself is the download link')
-                m3u8_links['1080'] = {                            # set resolution size to 1080 (assuming it as default. could be wrong)
-                    'resolution_size': 'Original (HD)',
-                    'downloadLink': master_m3u8_link,
-                    'downloadType': 'hls',
-                    'duration': duration
-                }
-                # get approx download size and add file size if available
-                file_size = self._get_download_size(master_m3u8_link)
-                if file_size: m3u8_links['1080'].update({'filesize': file_size})
-
         return m3u8_links
 
     # step-4.2.2.2 -- used in GogoAnime, MyAsianTV
@@ -259,7 +265,7 @@ class BaseClient():
         return duration & size of the video using ffprobe command
         Note: size is available only for mp4 links
         '''
-        duration, size = 0, None
+        duration, size, resolution = 0, None, None
         try:
             # Note: ffprobe is taking 3-10s, so try to avoid as much as possible
             if link_type == 'hls':
@@ -269,17 +275,18 @@ class BaseClient():
             else:
                 # add -show_streams in ffprobe to get more information
                 self.logger.debug('Fetching video duration using ffprobe command')
-                video_metadata = json.loads(self._exec_cmd(f'ffprobe -loglevel quiet -print_format json -show_format {link}'))
+                video_metadata = json.loads(self._exec_cmd(f'ffprobe -loglevel quiet -print_format json -show_format -select_streams v:0 -show_entries stream=width,height {link}'))
                 duration = float(video_metadata.get('format').get('duration'))
                 size = float(video_metadata.get('format').get('size'))
-                self.logger.debug(f'Size fetched is {size} bytes')
+                resolution = f"{video_metadata.get('streams', [{}])[0].get('width')}x{video_metadata.get('streams', [{}])[0].get('height')}"
+                self.logger.debug(f'Size fetched is {size} bytes, Resoltion: {resolution}')
 
             self.logger.debug(f'Duration fetched is {duration} seconds')
 
         except Exception as e:
             self.logger.warning(f'Failed to fetch video duration. Error: {e}')
 
-        return round(duration), size
+        return round(duration), size, resolution
 
     @threaded()
     def _fetch_content_length(self, url):
@@ -474,11 +481,11 @@ class BaseClient():
             elif dtype == 'mp4':
                 # if link is mp4, it is a direct download link
                 self.logger.debug(f'Found mp4 link. Adding the direct download link [{dlink}]')
-                duration, file_size = self._get_video_metadata(dlink, link_type='mp4')
+                duration, file_size, resolution = self._get_video_metadata(dlink, link_type='mp4')
                 duration = pretty_time(duration)
-                resltn = download_link.get('label', 'unknown').split()[0]
+                resltn = resolution.split('x')[-1]
                 resolution_links[resltn] = {
-                    'resolution_size': resltn,
+                    'resolution_size': resolution,
                     'downloadLink': dlink,
                     'downloadType': 'mp4',
                     'duration': duration

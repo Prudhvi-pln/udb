@@ -36,17 +36,17 @@ class SuperembedClient(BaseClient):
         self.captcha_message_element = config['Superembed'].get('captcha_message_element', '#captcha-message')
         self.captcha_element = config['Superembed'].get('captcha_element', 'div.captcha-holder')
         self.captcha_solver = config['Superembed'].get('captcha_solver', 'https://www.nyckel.com/v1/functions/5m8hktimwukzpb8r/invoke')
-        self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
-        self.blacklist_urls = config['blacklist_urls'] if config['blacklist_urls'] else []
+        self.preferred_urls = config['preferred_urls'] if config.get('preferred_urls') else []
+        self.blacklist_urls = config['blacklist_urls'] if config.get('blacklist_urls') else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
-        super().__init__(config['request_timeout'], session)
+        super().__init__(config.get('request_timeout', 30), session)
 
         # Initialize Search Client based on configuration
         config.setdefault('TMDB', {})
         config.setdefault('IMDB', {})
-        config['TMDB']['request_timeout'] = config['request_timeout']
-        config['IMDB']['request_timeout'] = config['request_timeout']
+        config['TMDB']['request_timeout'] = config.get('request_timeout', 30)
+        config['IMDB']['request_timeout'] = config.get('request_timeout', 30)
         if preferred_search.upper() == 'TMDB':
             self.search_client = TMDBClient(config['TMDB'], session)
         elif preferred_search.upper() == 'IMDB':

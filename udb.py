@@ -12,13 +12,13 @@ from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, thr
 from Utils.commons import VersionManager
 
 
+ACTIVE_CLIENTS = ['Anime (Gogoanime)', 'Anime (Animepahe)', 'Drama (Asianbxkiun)', 'Global (Anime, Series & Movies)']
 get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
 
 def get_client():
     '''Return a client instance'''
     # add hls_size_accuracy parameter passed from cli
-    config[series_type].update({'hls_size_accuracy': hls_size_accuracy})
-    __base_url = config[series_type].get('base_url', '').lower()
+    config.setdefault(series_type, {}).update({'hls_size_accuracy': hls_size_accuracy})
     # Load required Client based on user selection, to avoid unnecessary imports
     if 'animepahe' in series_type.lower():
         logger.debug('Creating Anime Client for AnimePahe site')
@@ -28,18 +28,14 @@ def get_client():
         logger.debug('Creating Anime Client for GogoAnime site')
         from Clients.GogoAnimeClient import GogoAnimeClient
         return GogoAnimeClient(config[series_type])
-    elif 'drama' in series_type.lower():
-        logger.debug('Creating Drama Client')
-        from Clients.DramaClient import DramaClient
-        return DramaClient(config[series_type])
-    elif 'vidsrc' in series_type.lower():
-        logger.debug('Creating Movies/TV-Shows Vidsrc Client')
-        from Clients.VidSrcClient import VidSrcClient
-        return VidSrcClient(config[series_type])
-    elif 'superembed' in series_type.lower():
-        logger.debug('Creating Movies/TV-Shows Superembed Client')
-        from Clients.SuperembedClient import SuperembedClient
-        return SuperembedClient(config[series_type])
+    elif 'asianbxkiun' in series_type.lower():
+        logger.debug('Creating Asianbxkiun Drama Client')
+        from Clients.AsianDramaClient import AsianDramaClient
+        return AsianDramaClient(config[series_type])
+    elif 'global' in series_type.lower():
+        logger.debug('Creating KissKh Drama Client')
+        from Clients.KissKhClient import KissKhClient
+        return KissKhClient(config[series_type])
     else:
         logger.error(f'Unknown series type: {series_type}')
         raise ExitException(1)
@@ -75,9 +71,8 @@ def get_series_type(keys, predefined_input=None):
     types = {}
     colprint('header', '\nSelect type of series:')
     for idx, typ in enumerate(keys):
-        if typ not in ['DownloaderConfig', 'LoggerConfig']:
-            colprint('results', f'{idx+1}: {typ}')
-            types[idx+1] = typ
+        colprint('results', f'{idx+1}: {typ}')
+        types[idx+1] = typ
 
     if predefined_input:
         colprint('predefined', f'\nUsing Predefined Input: {predefined_input}')
@@ -395,7 +390,7 @@ if __name__ == '__main__':
         delete_old_logs(config['LoggerConfig']['log_dir'], config['LoggerConfig'].get('log_retention_days', 7), config['LoggerConfig'].get('log_backup_count', 3))
 
         # get series type
-        series_type = get_series_type(config.keys(), series_type_predef)
+        series_type = get_series_type(ACTIVE_CLIENTS, series_type_predef)
         logger.info(f'Selected Series type: {series_type}')
 
         # create client

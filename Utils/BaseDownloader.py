@@ -24,13 +24,12 @@ class BaseDownloader():
         # add extra folder for season
         if ep_details.get('type', '') == 'tv':
             self.out_dir = f"{self.out_dir}{os.sep}Season-{ep_details['season']}"
-        self.concurrency = dl_config['concurrency_per_file'] if dl_config['concurrency_per_file'] != 'auto' else None
-        self.parent_temp_dir = dl_config['temp_download_dir'] if dl_config['temp_download_dir'] != 'auto' else os.path.join(f'{self.out_dir}', 'temp_dir')
+        self.concurrency = None if dl_config.get('concurrency_per_file', 'auto') == 'auto' else dl_config['concurrency_per_file']
+        self.parent_temp_dir = os.path.join(f'{self.out_dir}', 'temp_dir') if dl_config.get('temp_download_dir', 'auto') == 'auto' else dl_config['temp_download_dir']
         self.temp_dir = os.path.join(f"{self.parent_temp_dir}", f"{self.out_file.replace('.mp4','')}") #create temp directory per episode
-        self.request_timeout = dl_config['request_timeout']
+        self.request_timeout = dl_config.get('request_timeout', 30)
         self.series_type = ep_details.get('type', 'series')
         self.subtitles = ep_details.get('subtitles', {})
-        self.referer = ep_details['refererLink']
         self.thread_name_prefix = 'udb-mp4-'
 
         # create a requests session and use across to re-use cookies
@@ -39,9 +38,10 @@ class BaseDownloader():
         self.req_session.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
             "Accept-Encoding": "*",
-            "Connection": "keep-alive",
-            "Referer": self.referer
+            "Connection": "keep-alive"
         }
+        # update referer if defined
+        if ep_details.get('refererLink'): self.req_session.headers.update({"Referer": ep_details['refererLink']})
 
     def _colprint(self, theme, text, **kwargs):
         '''
@@ -197,6 +197,50 @@ class BaseDownloader():
                 # remove the merged chunk
                 os.remove(chunk_file)
 
+    def _download_subtitles(self):
+        for sub_name in list(self.subtitles):
+            sub_link = self.subtitles[sub_name]
+            sub_file = os.path.join(self.temp_dir, sub_name.replace(' ', '_') + '_' + os.path.basename(sub_link))
+            # update the dictionary pointing to downloaded file
+            self.subtitles[sub_name] = sub_file
+
+            try:
+                self.logger.debug(f'Downloading {sub_name} subtitle from {sub_link} to {sub_file}')
+                if os.path.isfile(sub_file):
+                    self.logger.debug('Subtitle file already exists. Skipping...')
+                    continue
+                sub_content = self._get_stream_data(sub_link)
+                # download the subtitle to local
+                with open(sub_file, 'wb') as f:
+                    f.write(sub_content)
+
+            except Exception as e:
+                self.logger.warning(f'Failed to download {sub_name} subtitle with error: {e}')
+                self.subtitles.pop(sub_name)
+
+    def _add_subtitles(self):
+        # print(f'Converting {self.out_file} to mp4')
+        out_file = os.path.join(f'{self.out_dir}', f'{self.out_file}')
+        # ffmpeg can't do in-place conversion. So, create a temp file and replace the original file
+        temp_out_file = os.path.join(f'{self.out_dir}', f'temp_{self.out_file}')
+        command = [f'ffmpeg -loglevel warning -i "{out_file}"']
+        maps = ['-map 0:v -map 0:a'] if self.subtitles else []
+        metadata = []
+
+        # Prepare the command if subtitles are present
+        for i, (lang, url) in enumerate(self.subtitles.items(), start=1):
+            command.append(f'-i "{url}"')
+            maps.append(f'-map {i}')
+            metadata.append(f'-metadata:s:s:{i-1} title="{lang}"')
+
+        metadata.append(f'-c:v copy -c:a copy -c:s mov_text -bsf:a aac_adtstoasc "{temp_out_file}"')
+
+        cmd = ' '.join(command + maps + metadata)
+        self._exec_cmd(cmd)
+
+        # Replace original file with the new file
+        os.replace(temp_out_file, out_file)
+
     def start_download(self, dl_link):
         # set chunk size to 1MiB
         self.chunk_size = 1024*1024
@@ -222,6 +266,12 @@ class BaseDownloader():
 
         self.logger.debug('Merging chunks to single file')
         self._merge_chunks(len(chunks))
+
+        if self.subtitles:
+            self.logger.debug('Downloading subtitles')
+            self._download_subtitles()
+            self.logger.debug('Adding subtitles to the video')
+            self._add_subtitles()
 
         # remove temp dir once completed and dir is empty
         self.logger.debug('Removing temporary directories')

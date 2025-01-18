@@ -13,7 +13,7 @@ class IMDBClient(BaseClient):
         self.search_url = self.base_url + config.get('search_url', 'find/?q=')
         self.season_url = config.get('season_url', 'episodes/?season=')
         super().__init__(config['request_timeout'], session)
-        self.logger.debug(f'TMDB client initialized with {config = }')
+        self.logger.debug(f'IMDB client initialized with {config = }')
 
     # step-1.1
     def _get_series_info(self, link):
