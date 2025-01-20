@@ -29,45 +29,72 @@ class KissKhClient(BaseClient):
         '''
         pretty print drama results based on your search
         '''
-        line = f"{key}: {details.get('title')} | Country: {details.get('country')} | Type: {details.get('series_type')}" + \
+        line = f"{key}: {details.get('title')} | Country: {details.get('country')}" + \
                 f"\n   | Episodes: {details.get('episodesCount', 'NA')} | Released: {details.get('year')} | Status: {details.get('status')}"
         self._colprint('results', line)
 
     # step-1
-    def search(self, keyword, search_limit=15):
+    def search(self, keyword, search_limit=5):
         '''
         search for drama based on a keyword
         '''
-        # url encode search keyword
-        search_key = quote_plus(keyword)
-        search_url = self.search_url + search_key
-        search_data = self._send_request(search_url, return_type='json')[:search_limit]
-
+        # search type codes
+        search_types = {
+            # '0': 'all',
+            '1': 'Asian Drama',
+            '2': 'Asian Movies',
+            '3': 'Anime',
+            '4': 'Hollywood'
+        }
         idx = 1
         search_results = {}
-        # Get basic details available from the site
-        for result in search_data:
-            series_id = result['id']
-            self.logger.debug(f'Fetching additional details for series_id: {series_id}')
-            series_data = self._send_request(self.series_url + str(series_id), return_type='json')
-            item = {
-                'title': series_data['title'],
-                'series_id': series_id,
-                'country': series_data['country'],
-                'episodesCount': series_data['episodesCount'],
-                'series_type': series_data['type'],
-                'status': series_data['status'],
-                'episodes': series_data['episodes']
-            }
-            try:
-                item['year'] = series_data['releaseDate'].split('-')[0]
-            except:
-                item['year'] = 'XXXX'
+        search_type = None
 
-            # Add index to every search result
-            search_results[idx] = item
-            self._show_search_results(idx, item)
-            idx += 1
+        # check if search type is provided
+        try:
+            if '>' in keyword:
+                search_type = [ k for k,v in search_types.items() if keyword.split('>')[0].strip().lower() in v.lower() ][0]
+                keyword = keyword.split('>')[1].strip()
+                search_limit = search_limit * 2
+        except:
+            pass
+
+        # url encode search keyword
+        search_key = quote_plus(keyword)
+
+        for code, type in search_types.items():
+            if search_type and search_type != code:
+                continue
+            self._colprint('blurred', f"-------------- {type} --------------")
+            self.logger.debug(f'Searching for {type} with keyword: {keyword}')
+            search_url = self.search_url + search_key + '&type=' + str(code)
+            search_data = self._send_request(search_url, return_type='json')[:search_limit]
+            # if len(search_data) == 0:
+            #     self.logger.error('Nothing here')
+
+            # Get basic details available from the site
+            for result in search_data:
+                series_id = result['id']
+                self.logger.debug(f'Fetching additional details for series_id: {series_id}')
+                series_data = self._send_request(self.series_url + str(series_id), return_type='json')
+                item = {
+                    'title': series_data['title'],
+                    'series_id': series_id,
+                    'country': series_data['country'],
+                    'episodesCount': series_data['episodesCount'],
+                    'series_type': series_data['type'],
+                    'status': series_data['status'],
+                    'episodes': series_data['episodes']
+                }
+                try:
+                    item['year'] = series_data['releaseDate'].split('-')[0]
+                except:
+                    item['year'] = 'XXXX'
+
+                # Add index to every search result
+                search_results[idx] = item
+                self._show_search_results(idx, item)
+                idx += 1
 
         return search_results
 
