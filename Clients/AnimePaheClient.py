@@ -284,12 +284,15 @@ class AnimePaheClient(BaseClient):
                 links = self._get_kwik_links_v2(episode_link)
                 self.logger.debug(f'Extracted & filtered (no eng dub & prefer AV1) kwik links: {links = }')
 
-                if links is not None:
-                    # add episode uid & link to udb dict
-                    self._update_udb_dict(episode.get('episode'), {'episodeId': episode.get('session'), 'episodeLink': episode_link})
+                # skip if no links found
+                if links is None:
+                    continue
 
-                    download_links[episode.get('episode')] = links
-                    self._show_episode_links(episode.get('episode'), links)
+                # add episode uid & link to udb dict
+                self._update_udb_dict(episode.get('episode'), {'episodeId': episode.get('session'), 'episodeLink': episode_link})
+
+                download_links[episode.get('episode')] = links
+                self._show_episode_links(episode.get('episode'), links)
 
         return download_links
 

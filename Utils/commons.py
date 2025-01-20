@@ -370,14 +370,14 @@ def delete_old_logs(directory='logs', days_threshold=7, max_file_count=3):
     '''
     Delete files older than `days_threshold` days and greater than `max_file_count` in the specified directory.
     '''
-    logging.info(f'Deleting log files older than {days_threshold} days and greater than {max_file_count}...')
+    logging.debug(f'Deleting log files older than {days_threshold} days and greater than {max_file_count}...')
     ndays = datetime.now().timestamp() - days_threshold * 86400
 
     # Get list of files to delete. If you encapsulate this in () brackets, it'll be a generator :)
     files_with_mtime = [ (f, os.stat(f).st_mtime) for f in ( os.path.join(directory, i) for i in os.listdir(directory) ) if os.path.isfile(f) and os.stat(f).st_mtime < ndays ]
     files_to_delete = sorted(files_with_mtime, key=lambda x: x[1])[:-max_file_count]
 
-    logging.info(f'Found {len(files_to_delete)} files to delete!')
+    logging.debug(f'Found {len(files_to_delete)} files to delete!')
     failure_cnt = 0
     for f in files_to_delete:
         try:
@@ -389,4 +389,4 @@ def delete_old_logs(directory='logs', days_threshold=7, max_file_count=3):
     if failure_cnt > 0:
         logging.error(f'Failed to delete {failure_cnt}/{len(files_to_delete)} log files older than {days_threshold} days.')
     else:
-        logging.info(f'Deleted {len(files_to_delete)} files.')
+        logging.debug(f'Deleted {len(files_to_delete)} files.')

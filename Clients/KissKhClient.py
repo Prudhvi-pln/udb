@@ -34,7 +34,7 @@ class KissKhClient(BaseClient):
         self._colprint('results', line)
 
     # step-1
-    def search(self, keyword, search_limit=20):
+    def search(self, keyword, search_limit=15):
         '''
         search for drama based on a keyword
         '''
@@ -120,29 +120,35 @@ class KissKhClient(BaseClient):
 
                 self.logger.debug(f'Fetching stream link')
                 dl_links = self._send_request(self.episode_url + str(episode.get('episodeId')) + '.png', return_type='json')
+                if dl_links is None:
+                    self.logger.warning(f'Failed to fetch stream link for episode: {episode.get("episode")}')
+                    continue
                 link = dl_links.get('Video')
                 self.logger.debug(f'Extracted stream link: {link = }')
 
-                if link is not None:
-                    # add episode details & stream link to udb dict
-                    self._update_udb_dict(episode.get('episode'), episode)
-                    self._update_udb_dict(episode.get('episode'), {'streamLink': link})
+                # skip if no stream link found
+                if link is None:
+                    continue
 
-                    # get subtitles dictionary (key:value = language:link) and add to udb dict
-                    if episode.get('episodeSubs', 0) > 0:
-                        self.logger.debug(f'Subtitles found. Fetching subtitles for the episode...')
-                        subtitles = self._send_request(self.subtitles_url + str(episode.get('episodeId')), return_type='json')
-                        subtitles = { sub['label']: sub['src'] for sub in subtitles }
-                        self._update_udb_dict(episode.get('episode'), {'subtitles': subtitles})
+                # add episode details & stream link to udb dict
+                self._update_udb_dict(episode.get('episode'), episode)
+                self._update_udb_dict(episode.get('episode'), {'streamLink': link})
 
-                    # get actual download links
-                    m3u8_links = [{'file': link, 'type': 'hls'}] if link.endswith('.m3u8') else [{'file': link, 'type': 'mp4'}]
-                    self.logger.debug(f'Fetching resolution streams from the stream link...')
-                    m3u8_links = self._get_download_links(m3u8_links, link, self.preferred_urls, self.blacklist_urls)
-                    self.logger.debug(f'Extracted {m3u8_links = }')
+                # get subtitles dictionary (key:value = language:link) and add to udb dict
+                if episode.get('episodeSubs', 0) > 0:
+                    self.logger.debug(f'Subtitles found. Fetching subtitles for the episode...')
+                    subtitles = self._send_request(self.subtitles_url + str(episode.get('episodeId')), return_type='json')
+                    subtitles = { sub['label']: sub['src'] for sub in subtitles }
+                    self._update_udb_dict(episode.get('episode'), {'subtitles': subtitles})
 
-                    download_links[episode.get('episode')] = m3u8_links
-                    self._show_episode_links(episode.get('episode'), m3u8_links)
+                # get actual download links
+                m3u8_links = [{'file': link, 'type': 'hls'}] if link.endswith('.m3u8') else [{'file': link, 'type': 'mp4'}]
+                self.logger.debug(f'Fetching resolution streams from the stream link...')
+                m3u8_links = self._get_download_links(m3u8_links, None, self.preferred_urls, self.blacklist_urls)
+                self.logger.debug(f'Extracted {m3u8_links = }')
+
+                download_links[episode.get('episode')] = m3u8_links
+                self._show_episode_links(episode.get('episode'), m3u8_links)
 
         return download_links
 

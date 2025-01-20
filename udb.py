@@ -297,9 +297,13 @@ def close_handlers():
     '''
     Close handlers properly to ensure rotation works without issues
     '''
-    for handler in logger.handlers:
-        handler.close()
-        logger.removeHandler(handler)
+    try:
+        for handler in logger.handlers:
+            handler.close()
+            logger.removeHandler(handler)
+    except Exception as e:
+        # if 'not defined' in str(e): return   # ignore if logger itself is not defined
+        print(f'Error while closing log handlers: {e}')
 
 
 if __name__ == '__main__':
