@@ -30,6 +30,8 @@ class BaseDownloader():
         self.request_timeout = dl_config.get('request_timeout', 30)
         self.series_type = ep_details.get('type', 'series')
         self.subtitles = ep_details.get('subtitles', {})
+        # special case for encrypted subtitles in kisskh client
+        self.encrypted_subs = ep_details.get('encrypted_subs', {})
         self.thread_name_prefix = 'udb-mp4-'
 
         # create a requests session and use across to re-use cookies
@@ -214,9 +216,38 @@ class BaseDownloader():
                 with open(sub_file, 'wb') as f:
                     f.write(sub_content)
 
+                if self.encrypted_subs:
+                    self._decrypt_subtitle_file(sub_file)
+
             except Exception as e:
                 self.logger.warning(f'Failed to download {sub_name} subtitle with error: {e}')
                 self.subtitles.pop(sub_name)
+
+    def _decrypt_subtitle_file(self, sub_file):
+        self.logger.debug(f'Decrypting subtitle file: {sub_file}')
+        decrypter = self.encrypted_subs['decrypter']
+        subs_key, subs_iv = self.encrypted_subs['key'], self.encrypted_subs['iv']
+
+        with open(sub_file, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+
+        decryption_fail_count = 0
+        with open(sub_file, 'w', encoding='utf-8') as file:
+            for line in lines:
+                if line.strip() and not line.strip().isdigit() and "-->" not in line:
+                    try:
+                        # decrypt and replace subtitle text lines
+                        file.write(decrypter(line.strip(), subs_key, subs_iv) + '\n')
+                    except:
+                        # write the line as-is if decryption fails
+                        file.write(line)
+                        decryption_fail_count += 1
+                else:
+                    # write sequence numbers, timestamps, and empty lines as-is
+                    file.write(line)
+
+        if decryption_fail_count > 0:
+            self.logger.warning(f'Failed to decrypt {decryption_fail_count} lines in the subtitle file')
 
     def _add_subtitles(self):
         # print(f'Converting {self.out_file} to mp4')

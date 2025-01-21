@@ -12,7 +12,7 @@ from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, thr
 from Utils.commons import VersionManager
 
 
-ACTIVE_CLIENTS = ['Anime (Gogoanime)', 'Anime (Animepahe)', 'Drama (Asianbxkiun)', 'Global (Anime, Series & Movies)']
+ACTIVE_CLIENTS = ['Anime (Gogoanime)', 'Anime (Animepahe)', 'Drama (Asianbxkiun)', 'Anime, Drama, Movies & TV Series (Kisskh)']
 get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
 
 def get_client():
@@ -32,7 +32,7 @@ def get_client():
         logger.debug('Creating Asianbxkiun Drama Client')
         from Clients.AsianDramaClient import AsianDramaClient
         return AsianDramaClient(config[series_type])
-    elif 'global' in series_type.lower():
+    elif 'kisskh' in series_type.lower():
         logger.debug('Creating KissKh Drama Client')
         from Clients.KissKhClient import KissKhClient
         return KissKhClient(config[series_type])

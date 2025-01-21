@@ -8,7 +8,7 @@ from Clients.BaseClient import BaseClient
 
 class KissKhClient(BaseClient):
     '''
-    Drama Client for kisskh site
+    All-in-one Client for kisskh site
     '''
     # step-0
     def __init__(self, config, session=None):
@@ -23,6 +23,9 @@ class KissKhClient(BaseClient):
         self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
         super().__init__(config.get('request_timeout', 30), session)
         self.logger.debug(f'KissKh Drama client initialized with {config = }')
+        # key and iv for decrypting subtitles. Source: https://github.com/debakarr/kisskh-dl/issues/14#issuecomment-1862055123
+        self.DECRYPT_SUBS_KEY = b'8056483646328763'
+        self.DECRYPT_SUBS_IV = b'6852612370185273'
 
     # step-1.1
     def _show_search_results(self, key, details):
@@ -167,6 +170,11 @@ class KissKhClient(BaseClient):
                     subtitles = self._send_request(self.subtitles_url + str(episode.get('episodeId')), return_type='json')
                     subtitles = { sub['label']: sub['src'] for sub in subtitles }
                     self._update_udb_dict(episode.get('episode'), {'subtitles': subtitles})
+                    # check if subtitles are encrypted and add decryption details to udb dict
+                    encrypted_subs_flag = True if { v for v in subtitles.values() if v.endswith('.txt') or v.endswith('.txt1') } else False
+                    if encrypted_subs_flag:
+                        self.logger.debug(f'Encrypted subtitles found. Adding decryption details to udb dict...')
+                        self._update_udb_dict(episode.get('episode'), {'encrypted_subs': {'key': self.DECRYPT_SUBS_KEY, 'iv': self.DECRYPT_SUBS_IV, 'decrypter': self._aes_decrypt}})
 
                 # get actual download links
                 m3u8_links = [{'file': link, 'type': 'hls'}] if link.endswith('.m3u8') else [{'file': link, 'type': 'mp4'}]
