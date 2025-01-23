@@ -1,7 +1,6 @@
 __author__ = 'Prudhvi PLN'
 
 import json
-import os
 import jsbeautifier as js
 from urllib.parse import quote_plus
 

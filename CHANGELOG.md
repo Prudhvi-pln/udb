@@ -1,7 +1,7 @@
 # Changelog
 
-## Version 2.14.0 [2025-01-18]
-- Hello World! A lot happened and almost every site is taken down ☹️. But, I'm back with a new update 🙂.
+## Version 2.14.0 [2025-01-22]
+- Hello World! A lot happened since the last version and almost every pirate site is taken down ☹️. But, I'm back with a new update 🙂.
 - Replaced MyAsianTVClient with AsianDramaClient, which is operational but no updates after Nov 24, 2024.
 - New KissKhClient serving all your needs: Anime, Drama, Movies, TV Shows (almost everything).
 

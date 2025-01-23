@@ -12,7 +12,7 @@ from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, thr
 from Utils.commons import VersionManager
 
 
-ACTIVE_CLIENTS = ['Anime (Gogoanime)', 'Anime (Animepahe)', 'Drama (Asianbxkiun)', 'Anime, Drama, Movies & TV Series (Kisskh)']
+ACTIVE_CLIENTS = ['Anime (Gogoanime)', 'Anime (Animepahe)', 'Drama (Asianbxkiun)', 'Anime, Drama, Movies & TV Shows (Kisskh)']
 get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
 
 def get_client():
