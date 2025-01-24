@@ -15,21 +15,7 @@ Anime (Animepahe):
   request_timeout: 30
   alternate_resolution_selector: 'lowest'
 
-Drama (Myasiantv):
-  request_timeout: 30
-  alternate_resolution_selector: 'lowest'
-  preferred_urls:
-  blacklist_urls:
-
-Movies & TV Shows (Vidsrc):
-  download_dir: D:\Entertainment\Hollywood
-  request_timeout: 30
-  alternate_resolution_selector: 'lowest'
-  preferred_urls:
-  blacklist_urls:
-
-Movies & TV Shows (Superembed):
-  download_dir: D:\Entertainment\Hollywood
+Drama (Asianbxkiun):
   request_timeout: 30
   alternate_resolution_selector: 'lowest'
   preferred_urls:
