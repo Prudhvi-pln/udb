@@ -23,17 +23,18 @@ class GogoAnimeClient(BaseClient):
         self.episode_sub_type_element = config.get('episode_sub_type_element', 'ul#episode_related li a div.cate')
         self.stream_links_element = config.get('stream_links_element', 'div.anime_muti_link a')
         self.download_fetch_link = config.get('download_fetch_link', 'encrypt-ajax.php')
-        self.preferred_urls = config['preferred_urls'] if config['preferred_urls'] else []
-        self.blacklist_urls = config['blacklist_urls'] if config['blacklist_urls'] else []
+        self.preferred_urls = config['preferred_urls'] if config.get('preferred_urls') else []
+        self.blacklist_urls = config['blacklist_urls'] if config.get('blacklist_urls') else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
-        super().__init__(config['request_timeout'], session)
+        super().__init__(config.get('request_timeout', 30), session)
         self.logger.debug(f'GogoAnime client initialized with {config = }')
         # regex to fetch the encrypted url args required to fetch master m3u8 / download links
         self.ENCRYPTED_URL_ARGS_REGEX = re.compile(rb'data-value="(.+?)"')
         # regex to fetch key & iv for decryption & encrytion. Reference: https://github.com/justfoolingaround/animdl
         self.CRYPT_KEYS_REGEX = re.compile(rb"(?:container|videocontent)-(\d+)")
         self.CDN_BASE_URL_REGEX = "base_url_cdn_api = '(.*)'"
+        self._colprint('blinking', '\nWARNING: This site has no updates after November 24, 2024. For latest episodes, use the other site.')
 
     # step-1.1
     def _get_series_info(self, link):
@@ -172,27 +173,30 @@ class GogoAnimeClient(BaseClient):
                 link = self._get_stream_link(episode.get('episodeLink'), self.stream_links_element)
                 self.logger.debug(f'Extracted stream link: {link = }')
 
-                if link is not None:
-                    # add episode details & stream link to udb dict
-                    self._update_udb_dict(episode.get('episode'), episode)
-                    self._update_udb_dict(episode.get('episode'), {'streamLink': link, 'refererLink': link})
+                # skip if no stream link found
+                if link is None:
+                    continue
 
-                    self.logger.debug(f'Extracting m3u8 links for {link = }')
-                    gdl_config = {
-                        'link': link,
-                        'crypt_keys_regex': self.CRYPT_KEYS_REGEX,
-                        'encrypted_url_args_regex': self.ENCRYPTED_URL_ARGS_REGEX,
-                        'download_fetch_link': self.download_fetch_link
-                    }
-                    # get download sources
-                    m3u8_links = self._get_download_sources(**gdl_config)
-                    if 'error' not in m3u8_links:
-                        # get actual download links
-                        m3u8_links = self._get_download_links(m3u8_links, link, self.preferred_urls, self.blacklist_urls)
-                    self.logger.debug(f'Extracted {m3u8_links = }')
+                # add episode details & stream link to udb dict
+                self._update_udb_dict(episode.get('episode'), episode)
+                self._update_udb_dict(episode.get('episode'), {'streamLink': link, 'refererLink': link})
 
-                    download_links[episode.get('episode')] = m3u8_links
-                    self._show_episode_links(episode.get('episode'), m3u8_links)
+                self.logger.debug(f'Extracting m3u8 links for {link = }')
+                gdl_config = {
+                    'link': link,
+                    'crypt_keys_regex': self.CRYPT_KEYS_REGEX,
+                    'encrypted_url_args_regex': self.ENCRYPTED_URL_ARGS_REGEX,
+                    'download_fetch_link': self.download_fetch_link
+                }
+                # get download sources
+                m3u8_links = self._get_download_sources(**gdl_config)
+                if 'error' not in m3u8_links:
+                    # get actual download links
+                    m3u8_links = self._get_download_links(m3u8_links, link, self.preferred_urls, self.blacklist_urls)
+                self.logger.debug(f'Extracted {m3u8_links = }')
+
+                download_links[episode.get('episode')] = m3u8_links
+                self._show_episode_links(episode.get('episode'), m3u8_links)
 
         return download_links
 

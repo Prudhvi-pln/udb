@@ -17,7 +17,7 @@ class HLSDownloader(BaseDownloader):
         super().__init__(dl_config, ep_details, session)
         # initialize HLS specific configuration
         self.m3u8_file = os.path.join(f'{self.temp_dir}', 'uwu.m3u8')
-        self.thread_name_prefix = 'udb-m3u8-'
+        self.thread_name_prefix = 'udb-hls-'
 
     def _has_uri(self, m3u8_data):
         method = re.search('URI=(.*)', m3u8_data)
@@ -43,8 +43,9 @@ class HLSDownloader(BaseDownloader):
     def _collect_ts_urls(self, m3u8_link, m3u8_data):
         # Improved regex to handle all cases. (get all lines except those starting with #)
         base_url = '/'.join(m3u8_link.split('/')[:-1])
-        normalize_url = lambda url, base_url: (url if url.startswith('http') else base_url + '/' + url)
-        urls = [ normalize_url(url.group(0), base_url) for url in re.finditer("^(?!#).+$", m3u8_data, re.MULTILINE) ]
+        normalize_url = lambda url, base_url: (url if url.startswith('http') else 'https:' + url if url.startswith('//') else base_url + '/' + url)
+        # Some m3u8 files have duplicate urls, so using set to remove duplicates
+        urls = list(set( normalize_url(url.group(0), base_url) for url in re.finditer("^(?!#).+$", m3u8_data, re.MULTILINE) ))
 
         return urls
 
@@ -80,31 +81,10 @@ class HLSDownloader(BaseDownloader):
             m3u8_content = re.sub('URI=(.*)/', f'URI="{key_temp_dir}/', m3u8_data, count=1)
             regex_safe = '\\\\' if os.sep == '\\' else '/'
             # strip off url for segments
-            m3u8_content = re.sub(r'https://(.*)/', '', m3u8_content)
+            m3u8_content = re.sub(r'(.*)//(.*)/', '', m3u8_content)
             # prefix the downloaded path for segments
             m3u8_content = re.sub(r'^(?!#).+$', rf'{seg_temp_dir}{regex_safe}\g<0>', m3u8_content, flags=re.MULTILINE)
             m3u8_f.write(m3u8_content)
-
-    def _download_subtitles(self):
-        for sub_name in list(self.subtitles):
-            sub_link = self.subtitles[sub_name]
-            sub_file = os.path.join(self.temp_dir, sub_name.replace(' ', '_') + '_' + os.path.basename(sub_link))
-            # update the dictionary pointing to downloaded file
-            self.subtitles[sub_name] = sub_file
-
-            try:
-                self.logger.debug(f'Downloading {sub_name} subtitle from {sub_link} to {sub_file}')
-                if os.path.isfile(sub_file):
-                    self.logger.debug('Subtitle file already exists. Skipping...')
-                    continue
-                sub_content = self._get_stream_data(sub_link)
-                # download the subtitle to local
-                with open(sub_file, 'wb') as f:
-                    f.write(sub_content)
-
-            except Exception as e:
-                self.logger.warning(f'Failed to download {sub_name} subtitle with error: {e}')
-                self.subtitles.pop(sub_name)
 
     def _convert_to_mp4(self):
         # print(f'Converting {self.out_file} to mp4')

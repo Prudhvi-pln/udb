@@ -1,5 +1,11 @@
 # Changelog
 
+## Version 2.14.0 [2025-01-24]
+- Hello World! A lot happened since the last version and almost every pirate site is taken down ☹️. But, I'm back with a new update 🙂.
+- Replaced MyAsianTVClient with AsianDramaClient, which is operational but no updates after Nov 24, 2024.
+- New KissKhClient 🎉 serving all your needs: Anime, Drama, Movies, TV Shows (almost everything).
+- AnimePaheClient: Removed dependency on jsbeautifier module.
+
 ## Version 2.13.4 [2024-07-26]
 - F2CloudClient: Added new client for F2Cloud (formerly Vidplay) under Vidsrc.
 - IMDBClient: Introduced a new search client using IMDB. The default search remains TMDB, but IMDB will be used as a fallback when TMDB is unreachable.

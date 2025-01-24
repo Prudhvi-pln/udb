@@ -1,8 +1,7 @@
 __author__ = 'Prudhvi PLN'
 
 import json
-import os
-import jsbeautifier as js
+import re
 from urllib.parse import quote_plus
 
 # modules to bypass DDoS protection
@@ -178,24 +177,26 @@ class AnimePaheClient(BaseClient):
     # step-6.2
     def parse_m3u8_link(self, text):
         '''
-        parse m3u8 link from raw response by executing the javascript code
+        parse m3u8 link using javascript's packed function implementation
         '''
-        # if below logic is still failing, then execute the javascript code from html response
-        # use either selenium in headless or use online compiler api (ex: https://onecompiler.com/javascript)
-        # print(text)
-
-        self.logger.debug('Extracting javascript code')
-        js_code = self._regex_extract(r";eval\(.*\)", text, 0)
-        if not js_code:
-            raise Exception('m3u8 link extraction failed. js code not found')
-
-        self.logger.debug('Executing javascript code')
+        self.logger.debug('Extracting packed args from javascript code')
+        x = r"\}\('(.*)'\)*,*(\d+)*,*(\d+)*,*'((?:[^'\\]|\\.)*)'\.split\('\|'\)*,*(\d+)*,*(\{\})"
         try:
-            parsed_js_code = js.beautify(js_code.replace(';', '', 1))
+            p, a, c, k, e, d = re.findall(x, text)[0]
+            p, a, c, k, e, d = p, int(a), int(c), k.split('|'), int(e), {}
         except Exception as e:
-            raise Exception('m3u8 link extraction failed. Unable to execute js')
+            raise Exception('m3u8 link extraction failed. Unable to extract packed args')
 
-        self.logger.debug('Extracting m3u8 links')
+        def e(c):
+            x = '' if c < a else e(int(c/a))
+            c = c % a
+            return x + (chr(c + 29) if c > 35 else '0123456789abcdefghijklmnopqrstuvwxyz'[c])
+
+        self.logger.debug('Unpacking extracted packed args')
+        for i in range(c): d[e(i)] = k[i] or e(i)
+        parsed_js_code = re.sub(r'\b(\w+)\b', lambda e: d.get(e.group(0)) or e.group(0), p)
+
+        self.logger.debug('Extracting m3u8 link from unpacked javascript code')
         parsed_link = self._regex_extract('http.*.m3u8', parsed_js_code, 0)
         if not parsed_link:
             raise Exception('m3u8 link extraction failed. link not found')
@@ -284,12 +285,15 @@ class AnimePaheClient(BaseClient):
                 links = self._get_kwik_links_v2(episode_link)
                 self.logger.debug(f'Extracted & filtered (no eng dub & prefer AV1) kwik links: {links = }')
 
-                if links is not None:
-                    # add episode uid & link to udb dict
-                    self._update_udb_dict(episode.get('episode'), {'episodeId': episode.get('session'), 'episodeLink': episode_link})
+                # skip if no links found
+                if links is None:
+                    continue
 
-                    download_links[episode.get('episode')] = links
-                    self._show_episode_links(episode.get('episode'), links)
+                # add episode uid & link to udb dict
+                self._update_udb_dict(episode.get('episode'), {'episodeId': episode.get('session'), 'episodeLink': episode_link})
+
+                download_links[episode.get('episode')] = links
+                self._show_episode_links(episode.get('episode'), links)
 
         return download_links
 
