@@ -302,7 +302,7 @@ def close_handlers():
             handler.close()
             logger.removeHandler(handler)
     except Exception as e:
-        # if 'not defined' in str(e): return   # ignore if logger itself is not defined
+        if 'not defined' in str(e): return   # ignore if logger itself is not defined
         print(f'Error while closing log handlers: {e}')
 
 
@@ -330,6 +330,7 @@ if __name__ == '__main__':
         parser.add_argument('-dc', '--disable-colors', default=False, action='store_true', help='disable colored output')
         parser.add_argument('-hsa', '--hls-size-accuracy', default=0, type=int, choices=range(0, 101), metavar='[0-100]',
                             help='accuracy to display the file size of hls files. Use 0 to disable. Please enable only if required as it is slow')
+        parser.add_argument('-dl', '--disable-looping', default=False, action='store_true', help='disable auto-restart of UDB')
         parser.add_argument('-u', '--update', default=False, action='store_true', help='update UDB to the latest version available')
 
         args = parser.parse_args()
@@ -351,6 +352,7 @@ if __name__ == '__main__':
         start_download_predef = 'y' if args.start_download else None
         disable_colors = args.disable_colors
         hls_size_accuracy = args.hls_size_accuracy
+        disable_looping = args.disable_looping
         update_flag = args.update
 
         # initialize color printer
@@ -541,7 +543,7 @@ if __name__ == '__main__':
         # Ensure to close handlers at the end of the script or before rotating
         close_handlers()
         # Auto-start a new UDB instance
-        if skip_restart: exit(0)
+        if skip_restart or disable_looping: exit(0)
         try:
             continuation_prompt = colprint('user_input', '\nReady for one more? Reload UDB (y|n)? ', input_type='recurring', input_options=['y', 'n', 'Y', 'N']).lower() or 'y'
             if continuation_prompt == 'y':
