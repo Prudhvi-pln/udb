@@ -91,11 +91,11 @@ class BaseDownloader():
         # shorten the name to show only ep number
         try:
             # set display prefix based on series type if defined
-            if self.series_type == 'tv':
+            if self.series_type.lower() == 'tv':
                 ss_no = self.out_dir.split('-')[-1]
                 ep_no = self.out_file.split()[1]
                 return f'S{int(ss_no):02d}E{int(ep_no):02d}'
-            elif self.series_type == 'movie':
+            elif self.series_type.lower() == 'movie':
                 return 'Movie'
 
             ep_no = self.out_file.split()[-3]

@@ -1,9 +1,9 @@
 argparse
 pyyaml
-jsbeautifier
 beautifulsoup4
 requests
 tqdm
 pycryptodomex
 undetected-chromedriver
 setuptools
+quickjs

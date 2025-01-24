@@ -552,6 +552,9 @@ class BaseClient():
             elif type(ep) == str and ep.startswith('m'):
                 display_prefix = 'Movie'
                 ep_no = int(ep.replace('m', ''))
+            elif self.udb_episode_dict.get(ep).get('episodeName').endswith('Movie'):
+                display_prefix = 'Movie'
+                ep_no = ep
             else:
                 ep_no = ep
 

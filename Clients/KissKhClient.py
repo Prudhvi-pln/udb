@@ -1,6 +1,7 @@
 __author__ = 'Prudhvi PLN'
 
 import re
+from quickjs import Context as quickjsContext
 from urllib.parse import quote_plus
 
 from Clients.BaseClient import BaseClient
@@ -15,14 +16,22 @@ class KissKhClient(BaseClient):
         self.base_url = config.get('base_url', 'https://kisskh.co/')
         self.search_url = self.base_url + config.get('search_url', 'api/DramaList/Search?q=')
         self.series_url = self.base_url + config.get('series_url', 'api/DramaList/Drama/')
-        self.episode_url = self.base_url + config.get('episode_url', 'api/DramaList/Episode/')
-        self.subtitles_url = self.base_url + config.get('subtitles_url', 'api/Sub/')
+        self.episode_url = self.base_url + config.get('episode_url', 'api/DramaList/Episode/{id}.png?kkey=')
+        self.subtitles_url = self.base_url + config.get('subtitles_url', 'api/Sub/{id}?kkey=')
         self.preferred_urls = config['preferred_urls'] if config.get('preferred_urls') else []
         self.blacklist_urls = config['blacklist_urls'] if config.get('blacklist_urls') else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
         super().__init__(config.get('request_timeout', 30), session)
         self.logger.debug(f'KissKh Drama client initialized with {config = }')
+        self.token_generation_js_code = None
+        self.quickjs_context = None
+        # site specific details required to create token. Check dev-notes for more details.
+        self.subGuid = "VgV52sWhwvBSf8BsM3BRY9weWiiCbtGp"
+        self.viGuid = "62f176f3bb1b5b8e70e39932ad34a0c7"
+        self.appVer = "2.8.10"
+        self.platformVer = 4830201
+        self.appName = "kisskh"
         # key and iv for decrypting subtitles. Source: https://github.com/debakarr/kisskh-dl/issues/14#issuecomment-1862055123
         self.DECRYPT_SUBS_KEY = b'8056483646328763'
         self.DECRYPT_SUBS_IV = b'6852612370185273'
@@ -35,6 +44,28 @@ class KissKhClient(BaseClient):
         line = f"{key}: {details.get('title')} | Country: {details.get('country')}" + \
                 f"\n   | Episodes: {details.get('episodesCount', 'NA')} | Released: {details.get('year')} | Status: {details.get('status')}"
         self._colprint('results', line)
+
+    # step-4.1
+    def _get_token(self, episode_id, uid):
+        '''
+        create token required to fetch stream & subtitle links
+        '''
+        # js code to generate token from kisskh site
+        if self.token_generation_js_code is None:
+            self.logger.debug('Fetching token generation js code...')
+            soup = self._get_bsoup(self.base_url + 'index.html')
+            common_js_url = self.base_url + [ i['src'] for i in soup.select('script') if i.get('src') and 'common' in i['src'] ][0]
+            self.token_generation_js_code = self._send_request(common_js_url)
+
+        # quickjs context for evaluating js code
+        if self.quickjs_context is None:
+            self.logger.debug('Creating quickjs context...')
+            self.quickjs_context = quickjsContext()
+
+        # evaluate js code to generate token
+        self.logger.debug(f'Evaluating js code to generate token using {episode_id = } and {uid = }')
+        token = self.quickjs_context.eval(self.token_generation_js_code + f'_0x54b991({episode_id}, null, "2.8.10", "{uid}", 4830201,  "kisskh", "kisskh", "kisskh", "kisskh", "kisskh", "kisskh")')
+        return token
 
     # step-1
     def search(self, keyword, search_limit=5):
@@ -112,7 +143,7 @@ class KissKhClient(BaseClient):
         self.logger.debug(f'Extracting episode details for {target["title"]}')
         for episode in episodes:
             ep_no = int(episode['number']) if str(episode['number']).endswith('.0') else episode['number']
-            ep_name = f"{target['title']} Episode {ep_no}"
+            ep_name = f"{target['title']} Movie" if target['series_type'].lower() == 'movie' else f"{target['title']} Episode {ep_no}"
             all_episodes_list.append({
                 'episode': ep_no,
                 'episodeName': self._windows_safe_string(ep_name),
@@ -128,11 +159,12 @@ class KissKhClient(BaseClient):
         pretty print episodes list from fetch_episodes_list
         '''
         start, end = self._get_episode_range_to_show(items[0].get('episode'), items[-1].get('episode'), predefined_range[1], threshold=24)
+        display_prefix = 'Movie' if items[0].get('episodeName').endswith('Movie') else 'Episode'
 
         for item in items:
             if item.get('episode') >= start and item.get('episode') <= end:
                 fmted_name = re.sub(r'\b(\d$)', r'0\1', item.get('episodeName'))
-                self._colprint('results', f"Episode: {fmted_name}")
+                self._colprint('results', f"{display_prefix}: {fmted_name}")
 
     # step-4
     def fetch_episode_links(self, episodes, ep_ranges):
@@ -141,6 +173,7 @@ class KissKhClient(BaseClient):
         '''
         download_links = {}
         ep_start, ep_end, specific_eps = ep_ranges['start'], ep_ranges['end'], ep_ranges.get('specific_no', [])
+        display_prefix = 'Movie' if episodes[0].get('episodeName').endswith('Movie') else 'Episode'
 
         for episode in episodes:
             # self.logger.debug(f'Current {episode = }')
@@ -148,8 +181,10 @@ class KissKhClient(BaseClient):
             if (float(episode.get('episode')) >= ep_start and float(episode.get('episode')) <= ep_end) or (float(episode.get('episode')) in specific_eps):
                 self.logger.debug(f'Processing {episode = }')
 
+                self.logger.debug('Fetching stream token')
+                token = self._get_token(episode.get('episodeId'), self.viGuid)
                 self.logger.debug(f'Fetching stream link')
-                dl_links = self._send_request(self.episode_url + str(episode.get('episodeId')) + '.png', return_type='json')
+                dl_links = self._send_request(self.episode_url.format(id=str(episode.get('episodeId'))) + token, return_type='json')
                 if dl_links is None:
                     self.logger.warning(f'Failed to fetch stream link for episode: {episode.get("episode")}')
                     continue
@@ -166,8 +201,10 @@ class KissKhClient(BaseClient):
 
                 # get subtitles dictionary (key:value = language:link) and add to udb dict
                 if episode.get('episodeSubs', 0) > 0:
-                    self.logger.debug(f'Subtitles found. Fetching subtitles for the episode...')
-                    subtitles = self._send_request(self.subtitles_url + str(episode.get('episodeId')), return_type='json')
+                    self.logger.debug('Subtitles found. Fetching subtitles token')
+                    token = self._get_token(episode.get('episodeId'), self.subGuid)
+                    self.logger.debug('Fetching subtitles for the episode...')
+                    subtitles = self._send_request(self.subtitles_url.format(id=str(episode.get('episodeId'))) + token, return_type='json')
                     subtitles = { sub['label']: sub['src'] for sub in subtitles }
                     self._update_udb_dict(episode.get('episode'), {'subtitles': subtitles})
                     # check if subtitles are encrypted and add decryption details to udb dict
@@ -183,7 +220,7 @@ class KissKhClient(BaseClient):
                 self.logger.debug(f'Extracted {m3u8_links = }')
 
                 download_links[episode.get('episode')] = m3u8_links
-                self._show_episode_links(episode.get('episode'), m3u8_links)
+                self._show_episode_links(episode.get('episode'), m3u8_links, display_prefix)
 
         return download_links
 
