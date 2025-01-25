@@ -2,9 +2,6 @@
 
 Welcome to the UDB, the Ultimate-Download-Bot for Anime, Drama, Movies & TV Shows! 🎉
 
-## UPDATE
-__Work in-progress to restore support for Drama and Movies/Series Clients.__
-
 ## Current Status (as on 2024-10-08)
 | S.No | Category           | Website                                   | Status |
 | :--: | :----------------- | :---------------------------------------: | :----: |
