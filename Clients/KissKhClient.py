@@ -35,6 +35,9 @@ class KissKhClient(BaseClient):
         # key and iv for decrypting subtitles. Source: https://github.com/debakarr/kisskh-dl/issues/14#issuecomment-1862055123
         self.DECRYPT_SUBS_KEY = b'8056483646328763'
         self.DECRYPT_SUBS_IV = b'6852612370185273'
+        # new key & iv for decrypting subtitles, as on Feb-13, 2025. Check your dev-notes for more details.
+        self.DECRYPT_SUBS_KEY2 = b'AmSmZVcH93UQUezi'
+        self.DECRYPT_SUBS_IV2 = b'ReBKWW8cqdjPEnF6'
 
     # step-1.1
     def _show_search_results(self, key, details):
@@ -214,13 +217,26 @@ class KissKhClient(BaseClient):
                     subtitles = { sub['label']: sub['src'] for sub in subtitles }
                     self._update_udb_dict(episode.get('episode'), {'subtitles': subtitles})
                     # check if subtitles are encrypted and add decryption details to udb dict
-                    encrypted_subs_flag = True if { v for v in subtitles.values() if v.endswith('.txt') or v.endswith('.txt1') } else False
-                    if encrypted_subs_flag:
+                    # every subtitle can have it's own encryption type. So, check all subtitles for encryption and add decryption details to udb dict
+                    encrypted_subs_details = {}
+                    for k, v in subtitles.items():
+                        self.logger.debug(f'Checking encryption type for {k} language...')
+                        encryption_type = v.split('?')[0].split('.')[-1]
+                        if encryption_type == 'txt':
+                            encrypted_subs_details[k] = {'key': self.DECRYPT_SUBS_KEY, 'iv': self.DECRYPT_SUBS_IV, 'decrypter': self._aes_decrypt}
+                        elif encryption_type == 'txt1':
+                            encrypted_subs_details[k] = {'key': self.DECRYPT_SUBS_KEY2, 'iv': self.DECRYPT_SUBS_IV2, 'decrypter': self._aes_decrypt}
+                        elif encryption_type == 'srt':
+                            continue    # no encryption
+                        else:
+                            self.logger.warning(f"Unknown encryption type found: {encryption_type}")
+
+                    if encrypted_subs_details:
                         self.logger.debug(f'Encrypted subtitles found. Adding decryption details to udb dict...')
-                        self._update_udb_dict(episode.get('episode'), {'encrypted_subs': {'key': self.DECRYPT_SUBS_KEY, 'iv': self.DECRYPT_SUBS_IV, 'decrypter': self._aes_decrypt}})
+                        self._update_udb_dict(episode.get('episode'), {'encrypted_subs_details': encrypted_subs_details})
 
                 # get actual download links
-                m3u8_links = [{'file': link, 'type': 'hls'}] if link.endswith('.m3u8') else [{'file': link, 'type': 'mp4'}]
+                m3u8_links = [{'file': link, 'type': 'hls'}] if link.split('?')[0].endswith('.m3u8') else [{'file': link, 'type': 'mp4'}]
                 self.logger.debug(f'Fetching resolution streams from the stream link...')
                 try:
                     m3u8_links = self._get_download_links(m3u8_links, None, self.preferred_urls, self.blacklist_urls)

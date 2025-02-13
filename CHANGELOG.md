@@ -1,11 +1,12 @@
 # Changelog
 
-## Version 2.14.1 [2025-01-30]
+## Version 2.14.2 [2025-02-13]
 - Hello World! A lot happened since the last version and almost every pirate site is taken down ☹️. But, I'm back with a new update 🙂.
 - Replaced MyAsianTVClient with AsianDramaClient, which is operational but no updates after Nov 24, 2024.
 - New KissKhClient 🎉 serving all your needs: Anime, Drama, Movies, TV Shows (almost everything).
 - AnimePaheClient: Removed dependency on jsbeautifier module.
 - KissKhClient: Fix erroring out on upcoming episodes.
+- KissKhClient: Update subtitle decryption functions with new decyption logic.
 
 ## Version 2.13.4 [2024-07-26]
 - F2CloudClient: Added new client for F2Cloud (formerly Vidplay) under Vidsrc.

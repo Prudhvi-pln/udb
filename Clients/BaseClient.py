@@ -457,7 +457,7 @@ class BaseClient():
             dlink = download_link.get('file')
             dtype = download_link.get('type', '').strip().lower()
             # set default download type as HLS if link name ends with m3u8
-            if dtype == '' and dlink.endswith('.m3u8'):
+            if dtype == '' and dlink.split('?')[0].endswith('.m3u8'):
                 dtype = 'hls'
 
             if dtype == 'hls':
