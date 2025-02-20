@@ -4,6 +4,7 @@ import logging
 import os
 import requests
 import sys
+import http.client
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from shutil import rmtree
 from tqdm.auto import tqdm
@@ -13,7 +14,7 @@ from Utils.commons import colprint, exec_os_cmd, retry, PRINT_THEMES, DISPLAY_CO
 
 class BaseDownloader():
     '''
-    Download Client for downloading files directly using requests
+    Download Client for downloading files directly using requests and http.client
     '''
     def __init__(self, dl_config, ep_details, session=None):
         # logger init
@@ -37,6 +38,9 @@ class BaseDownloader():
         # create a requests session and use across to re-use cookies
         self.req_session = session if session else requests.Session()
 
+        # set http client usage based on config. As on Feb 21 2025, kisskh works with only http.client
+        self.use_http_client = dl_config.get('use_http_client', False)
+
         self.req_session.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
             "Accept-Encoding": "*",
@@ -55,24 +59,42 @@ class BaseDownloader():
             colprint(theme, text, **kwargs)
 
     def _get_raw_stream_data(self, url, stream=True, header=None):
-        # print(f'{self.req_session}: {url}')
-        if header is not None:
-            response = self.req_session.get(url, stream=stream, timeout=self.request_timeout, headers=header)
+        '''
+        Fetch raw stream data using requests or http.client
+        '''
+        if self.use_http_client:
+            # Use http.client for the request
+            parsed_url = requests.utils.urlparse(url)
+            conn = http.client.HTTPSConnection(parsed_url.netloc, timeout=self.request_timeout)
+            path = parsed_url.path + '?' + parsed_url.query
+            headers = self.req_session.headers.copy()
+            if header: headers.update(header)
+            conn.request("GET", path, headers=headers)
+            response = conn.getresponse()
+            if response.status in [200, 206]:  # 206 means partial data (i.e., for chunked downloads)
+                return response
+            else:
+                raise Exception(f'Failed with response code: {response.status}')
         else:
-            response = self.req_session.get(url, stream=stream, timeout=self.request_timeout)
-        # print(response)
-
-        if response.status_code in [200, 206]:  # 206 means partial data (i.e., for chunked downloads)
-            return response
-        else:
-            raise Exception(f'Failed with response code: {response.status_code}')
+            # Use requests for the request
+            headers = self.req_session.headers.copy()
+            if header: headers.update(header)
+            response = self.req_session.get(url, stream=stream, timeout=self.request_timeout, headers=headers)
+            if response.status_code in [200, 206]:  # 206 means partial data (i.e., for chunked downloads)
+                return response
+            else:
+                raise Exception(f'Failed with response code: {response.status_code}')
 
     def _get_stream_data(self, url, to_text=False, stream=False):
         response = self._get_raw_stream_data(url, stream)
-        return response.text if to_text else response.content
+        if self.use_http_client:
+            data = response.read()
+            return data.decode('utf-8') if to_text else data
+        else:
+            return response.text if to_text else response.content
 
     def _create_out_dirs(self):
-        self.logger.debug(f'Creating outout directories: {self.out_dir}')
+        self.logger.debug(f'Creating output directories: {self.out_dir}')
         os.makedirs(self.out_dir, exist_ok=True)
         os.makedirs(self.temp_dir, exist_ok=True)
 
@@ -135,9 +157,16 @@ class BaseDownloader():
             # capture the size to update progress bar
             size = 0 
             with open(chunk_file, 'wb') as f:
-                for chunk in response.iter_content(self.chunk_size):
-                    if chunk:
+                if isinstance(response, http.client.HTTPResponse):
+                    while True:
+                        chunk = response.read(self.chunk_size)
+                        if not chunk:
+                            break
                         size += f.write(chunk)
+                else:
+                    for chunk in response.iter_content(self.chunk_size):
+                        if chunk:
+                            size += f.write(chunk)
 
             return (f'Chunk [{chunk_name}] downloaded', size)
 

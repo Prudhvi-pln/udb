@@ -12,7 +12,8 @@ from Utils.commons import create_logger, load_yaml, pretty_time, strip_ansi, thr
 from Utils.commons import VersionManager
 
 
-ACTIVE_CLIENTS = ['Anime (Gogoanime)', 'Anime (Animepahe)', 'Drama (Asianbxkiun)', 'Anime, Drama, Movies & TV Shows (Kisskh)']
+ACTIVE_CLIENTS = ['Anime (Animepahe)', 'Anime, Drama, Movies & TV Shows (Kisskh)']
+HIDDEN_CLIENTS = ['Anime (Gogoanime)', 'Drama (Asianbxkiun)']       # obsolete clients
 get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
 
 def get_client():
@@ -318,6 +319,7 @@ if __name__ == '__main__':
         parser = argparse.ArgumentParser(description='UDB Client to download anime / drama / movies / series in one-shot.')
         parser.add_argument('-c', '--conf', default='config_udb.yaml',
                             help='configuration file for UDB client (default: config_udb.yaml)')
+        parser.add_argument('-H', '--hidden', default=False, action='store_true', help='show hidden clients')
         parser.add_argument('-l', '--log-file', help='custom file name for logging (default: udb_{YYYYMMDDHHMMSS}.log)')
         parser.add_argument('-v', '--version', default=False, action='store_true', help='display current version of UDB')
         parser.add_argument('-s', '--series-type', type=int, help='type of series')
@@ -335,6 +337,7 @@ if __name__ == '__main__':
 
         args = parser.parse_args()
         config_file = args.conf
+        show_hidden_clients = args.hidden
         log_file_name = args.log_file
         # set the log_file_name
         if log_file_name is None:
@@ -396,12 +399,17 @@ if __name__ == '__main__':
         delete_old_logs(config['LoggerConfig']['log_dir'], config['LoggerConfig'].get('log_retention_days', 7), config['LoggerConfig'].get('log_backup_count', 3))
 
         # get series type
+        if show_hidden_clients: ACTIVE_CLIENTS.extend(HIDDEN_CLIENTS)
         series_type = get_series_type(ACTIVE_CLIENTS, series_type_predef)
         logger.info(f'Selected Series type: {series_type}')
 
         # create client
         client = get_client()
         logger.info(f'Client: {client}')
+
+        # set client specific download configurations
+        if 'kisskh' in series_type.lower():
+            downloader_config['use_http_client'] = True
 
         # set respective download dir if present
         if 'download_dir' in config[series_type]:
