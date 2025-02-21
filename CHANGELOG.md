@@ -5,6 +5,7 @@
 - KissKhClient: Fix erroring out on upcoming episodes.
 - KissKhClient: Update subtitle decryption functions with new decyption logic.
 - KissKhClient: Fix for new security check.
+- New cli option `-H` to show hidden/unmanaged clients.
 
 ## Version 2.14.0 [2025-01-18]
 - Hello World! A lot happened since the last version and almost every pirate site is taken down ☹️. But, I'm back with a new update 🙂.

@@ -274,13 +274,13 @@ class BaseClient():
                 duration = sum([ float(match.group(1)) for match in re.finditer('#EXTINF:(.*),', data) ])
             else:
                 # add -show_streams in ffprobe to get more information
-                self.logger.debug('Fetching video duration using ffprobe command')
                 ffprobe_cmd = f'ffprobe -loglevel quiet -print_format json -show_format -select_streams v:0 -show_entries stream=width,height'
                 if referer:
                     ffprobe_cmd += f' -referer "{referer}"'
+                self.logger.debug(f'Fetching video duration using ffprobe command: {ffprobe_cmd} "{link}"')
                 video_metadata = json.loads(self._exec_cmd(f'{ffprobe_cmd} "{link}"'))
-                duration = float(video_metadata.get('format').get('duration'))
-                size = float(video_metadata.get('format').get('size'))
+                duration = float(video_metadata.get('format', {}).get('duration', 0))
+                size = float(video_metadata.get('format', {}).get('size', 0))
                 resolution = f"{video_metadata.get('streams', [{}])[0].get('width')}x{video_metadata.get('streams', [{}])[0].get('height')}"
                 self.logger.debug(f'Size fetched is {size} bytes, Resoltion: {resolution}')
 
@@ -439,6 +439,7 @@ class BaseClient():
         - Sort the resolutions in ascending order
         '''
         link, preferred_urls, blacklist_urls = config_data
+        pad_https = lambda x: 'https:' + x if x.startswith('//') else x
         # re-order urls based on user preference
         ordered_download_links = [ j for i in preferred_urls for j in download_links if i in j.get('file') ]
         # append remaining urls
@@ -457,7 +458,7 @@ class BaseClient():
 
         for download_link in ordered_download_links:
             counter += 1
-            dlink = download_link.get('file')
+            dlink = pad_https(download_link.get('file'))
             dtype = download_link.get('type', '').strip().lower()
             # set default download type as HLS if link name ends with m3u8
             if dtype == '' and dlink.split('?')[0].endswith('.m3u8'):
