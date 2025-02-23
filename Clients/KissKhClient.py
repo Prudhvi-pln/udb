@@ -199,14 +199,14 @@ class KissKhClient(BaseClient):
                     continue
 
                 # check if link has countdown timer for upcoming releases
-                # if 'tickcounter.com' in link:
-                #     self.logger.debug(f'Episode {episode.get("episode")} is not released yet')
-                #     self._show_episode_links(episode.get('episode'), {'error': 'Not Released Yet'}, display_prefix)
-                #     continue
+                if 'tickcounter.com' in link:
+                    self.logger.debug(f'Episode {episode.get("episode")} is not released yet')
+                    self._show_episode_links(episode.get('episode'), {'error': 'Not Released Yet'}, display_prefix)
+                    continue
 
                 # add episode details & stream link to udb dict
                 self._update_udb_dict(episode.get('episode'), episode)
-                self._update_udb_dict(episode.get('episode'), {'streamLink': link})
+                self._update_udb_dict(episode.get('episode'), {'streamLink': link, 'refererLink': self.base_url})
 
                 # get subtitles dictionary (key:value = language:link) and add to udb dict
                 if episode.get('episodeSubs', 0) > 0:
@@ -239,7 +239,7 @@ class KissKhClient(BaseClient):
                 m3u8_links = [{'file': link, 'type': 'hls'}] if link.split('?')[0].endswith('.m3u8') else [{'file': link, 'type': 'mp4'}]
                 self.logger.debug(f'Fetching resolution streams from the stream link...')
                 try:
-                    m3u8_links = self._get_download_links(m3u8_links, None, self.preferred_urls, self.blacklist_urls)
+                    m3u8_links = self._get_download_links(m3u8_links, self.base_url, self.preferred_urls, self.blacklist_urls)
                     self.logger.debug(f'Extracted {m3u8_links = }')
                 except Exception as e:
                     self.logger.error(f'Failed to extract download links for episode: {episode.get("episode")}. Error: {e}')

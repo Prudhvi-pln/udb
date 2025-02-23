@@ -78,7 +78,7 @@ To use the UDB, make sure you have the following requirements met:
 4. Edit the configuration in your favourite editor: __Make sure to set the download path__
 
     ```
-    vi config.yaml
+    vi config_udb.yaml
     ```
 
 5. You're all set! Start downloading your favorite series by running:
