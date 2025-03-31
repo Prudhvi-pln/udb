@@ -228,7 +228,8 @@ class BaseClient():
                 self.logger.debug('master m3u8 link itself is the download link')
                 # treat is as mp4 to fetch metadata using ffprobe
                 duration, size, resolution = self._get_video_metadata(master_m3u8_link, 'mp4', referer)
-                m3u8_links[resolution.split('x')[-1]] = {
+                _res_key = resolution.split('x')[-1] if resolution else '1080'
+                m3u8_links[_res_key] = {
                     'resolution_size': resolution,
                     'downloadLink': master_m3u8_link,
                     'downloadType': 'hls',
