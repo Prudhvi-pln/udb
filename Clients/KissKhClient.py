@@ -32,12 +32,15 @@ class KissKhClient(BaseClient):
         self.appVer = "2.8.10"
         self.platformVer = 4830201
         self.appName = "kisskh"
-        # key and iv for decrypting subtitles. Source: https://github.com/debakarr/kisskh-dl/issues/14#issuecomment-1862055123
+        # key and iv for decrypting subtitles for txt. Source: https://github.com/debakarr/kisskh-dl/issues/14#issuecomment-1862055123
         self.DECRYPT_SUBS_KEY = b'8056483646328763'
         self.DECRYPT_SUBS_IV = b'6852612370185273'
-        # new key & iv for decrypting subtitles, as on Feb-13, 2025. Check your dev-notes for more details.
+        # new key & iv for decrypting subtitles for txt1, as on Feb-13, 2025. Check your dev-notes for more details.
         self.DECRYPT_SUBS_KEY2 = b'AmSmZVcH93UQUezi'
         self.DECRYPT_SUBS_IV2 = b'ReBKWW8cqdjPEnF6'
+        # key & iv for decrypting subtitles, default encryption.
+        self.DECRYPT_SUBS_KEY3 = b'sWODXX04QRTkHdlZ'
+        self.DECRYPT_SUBS_IV3 = b'8pwhapJeC4hrS9hO'
 
     # step-1.1
     def _show_search_results(self, key, details):
@@ -229,7 +232,7 @@ class KissKhClient(BaseClient):
                         elif encryption_type == 'srt':
                             continue    # no encryption
                         else:
-                            self.logger.warning(f"Unknown encryption type found: {encryption_type}")
+                            encrypted_subs_details[k] = {'key': self.DECRYPT_SUBS_KEY3, 'iv': self.DECRYPT_SUBS_IV3, 'decrypter': self._aes_decrypt}  # use default encryption
 
                     if encrypted_subs_details:
                         self.logger.debug(f'Encrypted subtitles found. Adding decryption details to udb dict...')

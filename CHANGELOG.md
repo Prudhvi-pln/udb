@@ -1,5 +1,9 @@
 # Changelog
 
+## Version 2.14.4 [2025-04-01]
+- KissKhClient: Fix #39: Added missing decryption for subtitles.
+- Few bug fixes.
+
 ## Version 2.14.3 [2025-02-21]
 - AnimePaheClient: Removed dependency on jsbeautifier module.
 - KissKhClient: Fix erroring out on upcoming episodes.
