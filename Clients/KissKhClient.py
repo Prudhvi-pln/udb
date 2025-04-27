@@ -13,7 +13,7 @@ class KissKhClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
-        self.base_url = config.get('base_url', 'https://kisskh.co/')
+        self.base_url = config.get('base_url', 'https://kisskh.ovh/')
         self.search_url = self.base_url + config.get('search_url', 'api/DramaList/Search?q=')
         self.series_url = self.base_url + config.get('series_url', 'api/DramaList/Drama/')
         self.episode_url = self.base_url + config.get('episode_url', 'api/DramaList/Episode/{id}.png?kkey=')

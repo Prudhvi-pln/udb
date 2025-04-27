@@ -1,7 +1,8 @@
 # Changelog
 
-## Version 2.14.4 [2025-04-01]
+## Version 2.14.5 [2025-04-27]
 - KissKhClient: Fix #39: Added missing decryption for subtitles.
+- KissKhClient: Fix #42: Updated domain.
 - Few bug fixes.
 
 ## Version 2.14.3 [2025-02-21]
