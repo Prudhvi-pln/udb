@@ -1,8 +1,10 @@
 # Changelog
 
-## Version 2.14.5 [2025-04-27]
+## Version 2.14.6 [2025-04-30]
 - KissKhClient: Fix #39: Added missing decryption for subtitles.
 - KissKhClient: Fix #42: Updated domain.
+- KissKhClient: Fix #42: Compatability with ffmpeg 2025 version.
+- Fix #45: Fetch Google Chrome version in MacOS.
 - Few bug fixes.
 
 ## Version 2.14.3 [2025-02-21]

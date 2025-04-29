@@ -284,7 +284,7 @@ class BaseDownloader():
         out_file = os.path.join(f'{self.out_dir}', f'{self.out_file}')
         # ffmpeg can't do in-place conversion. So, create a temp file and replace the original file
         temp_out_file = os.path.join(f'{self.out_dir}', f'temp_{self.out_file}')
-        command = [f'ffmpeg -loglevel warning -i "{out_file}"']
+        command = [f'ffmpeg -extension_picky 0 -allowed_extensions ALL -loglevel warning -i "{out_file}"']
         maps = ['-map 0:v -map 0:a'] if self.subtitles else []
         metadata = []
 

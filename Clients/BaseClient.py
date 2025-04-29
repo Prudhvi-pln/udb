@@ -275,7 +275,7 @@ class BaseClient():
                 duration = sum([ float(match.group(1)) for match in re.finditer('#EXTINF:(.*),', data) ])
             else:
                 # add -show_streams in ffprobe to get more information
-                ffprobe_cmd = f'ffprobe -loglevel quiet -print_format json -show_format -select_streams v:0 -show_entries stream=width,height'
+                ffprobe_cmd = f'ffprobe -extension_picky 0 -allowed_extensions ALL -loglevel quiet -print_format json -show_format -select_streams v:0 -show_entries stream=width,height'
                 if referer:
                     ffprobe_cmd += f' -referer "{referer}"'
                 self.logger.debug(f'Fetching video duration using ffprobe command: {ffprobe_cmd} "{link}"')
@@ -732,7 +732,7 @@ class BaseClient():
                 get_version = lambda path: [ is_match(d).group(0) for d in os.listdir(os.path.dirname(path)) if is_match(d) ][0]
                 version = get_version(chrome_path)
             else:                       # = Linux OS
-                version = self._exec_cmd(f'{chrome_path} --version').strip('Google Chrome ').strip()
+                version = self._exec_cmd(f"'{chrome_path}' --version").strip('Google Chrome ').strip()
 
             return int(version.split('.')[0])
 
