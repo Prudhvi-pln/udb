@@ -1,6 +1,6 @@
 # Changelog
 
-## Version 2.14.6 [2025-04-30]
+## Version 2.14.7 [2025-04-30]
 - KissKhClient: Fix #39: Added missing decryption for subtitles.
 - KissKhClient: Fix #42: Updated domain.
 - KissKhClient: Fix #42: Compatability with ffmpeg 2025 version.
