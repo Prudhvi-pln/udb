@@ -22,6 +22,7 @@ class KissKhClient(BaseClient):
         self.blacklist_urls = config['blacklist_urls'] if config.get('blacklist_urls') else []
         self.selector_strategy = config.get('alternate_resolution_selector', 'lowest')
         self.hls_size_accuracy = config.get('hls_size_accuracy', 0)
+        self.search_limit = config.get('search_limit', 5)
         super().__init__(config.get('request_timeout', 30), session)
         self.logger.debug(f'KissKh Drama client initialized with {config = }')
         self.token_generation_js_code = None
@@ -74,7 +75,7 @@ class KissKhClient(BaseClient):
         return token
 
     # step-1
-    def search(self, keyword, search_limit=5):
+    def search(self, keyword):
         '''
         search for drama based on a keyword
         '''
@@ -95,7 +96,9 @@ class KissKhClient(BaseClient):
             if '>' in keyword:
                 search_type = [ k for k,v in search_types.items() if keyword.split('>')[0].strip().lower() in v.lower() ][0]
                 keyword = keyword.split('>')[1].strip()
-                search_limit = search_limit * 2
+                search_limit = self.search_limit * 2
+            else:
+                search_limit = self.search_limit
         except:
             pass
 
