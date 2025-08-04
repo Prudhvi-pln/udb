@@ -1,5 +1,10 @@
 # Changelog
 
+## Version 2.14.8 [2025-08-04]
+- Removed obsolete clients.
+- Added a configuration setting to allow displaying more search results. Specify `search_limit` in the client-specific configuration in your yaml file.
+- Fix #56: Added url redirects for http.client mode.
+
 ## Version 2.14.7 [2025-04-30]
 - KissKhClient: Fix #39: Added missing decryption for subtitles.
 - KissKhClient: Fix #42: Updated domain.

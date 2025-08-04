@@ -13,7 +13,7 @@ from Utils.commons import VersionManager
 
 
 ACTIVE_CLIENTS = ['Anime (Animepahe)', 'Anime, Drama, Movies & TV Shows (Kisskh)']
-HIDDEN_CLIENTS = ['Anime (Gogoanime)', 'Drama (Asianbxkiun)']       # obsolete clients
+HIDDEN_CLIENTS = []       # obsolete clients
 get_current_time = lambda fmt='%F %T': datetime.now().strftime(fmt)
 
 def get_client():
@@ -25,14 +25,6 @@ def get_client():
         logger.debug('Creating Anime Client for AnimePahe site')
         from Clients.AnimePaheClient import AnimePaheClient
         return AnimePaheClient(config[series_type])
-    elif 'gogoanime' in series_type.lower():
-        logger.debug('Creating Anime Client for GogoAnime site')
-        from Clients.GogoAnimeClient import GogoAnimeClient
-        return GogoAnimeClient(config[series_type])
-    elif 'asianbxkiun' in series_type.lower():
-        logger.debug('Creating Asianbxkiun Drama Client')
-        from Clients.AsianDramaClient import AsianDramaClient
-        return AsianDramaClient(config[series_type])
     elif 'kisskh' in series_type.lower():
         logger.debug('Creating KissKh Drama Client')
         from Clients.KissKhClient import KissKhClient

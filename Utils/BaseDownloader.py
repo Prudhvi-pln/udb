@@ -7,6 +7,7 @@ import sys
 import http.client
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from shutil import rmtree
+from ssl import _create_unverified_context
 from tqdm.auto import tqdm
 
 from Utils.commons import colprint, exec_os_cmd, retry, PRINT_THEMES, DISPLAY_COLORS
@@ -63,18 +64,32 @@ class BaseDownloader():
         Fetch raw stream data using requests or http.client
         '''
         if self.use_http_client:
-            # Use http.client for the request
-            parsed_url = requests.utils.urlparse(url)
-            conn = http.client.HTTPSConnection(parsed_url.netloc, timeout=self.request_timeout)
-            path = parsed_url.path + '?' + parsed_url.query
-            headers = self.req_session.headers.copy()
-            if header: headers.update(header)
-            conn.request("GET", path, headers=headers)
-            response = conn.getresponse()
-            if response.status in [200, 206]:  # 206 means partial data (i.e., for chunked downloads)
-                return response
-            else:
-                raise Exception(f'Failed with response code: {response.status}')
+            # Use http.client for the request with redirect support
+            max_redirects = 5
+            current_url = url
+            for _ in range(max_redirects):
+                parsed_url = requests.utils.urlparse(current_url)
+                conn = http.client.HTTPSConnection(parsed_url.netloc, timeout=self.request_timeout, context=_create_unverified_context())
+                path = parsed_url.path
+                if parsed_url.query:
+                    path += '?' + parsed_url.query
+                headers = self.req_session.headers.copy()
+                if header: headers.update(header)
+                conn.request("GET", path, headers=headers)
+                response = conn.getresponse()
+                if response.status in [200, 206]:  # Success - 206 means partial data (i.e., for chunked downloads)
+                    return response
+                elif response.status in [301, 302, 303, 307, 308]:
+                    # Handle redirect
+                    location = response.getheader('Location')
+                    if not location:
+                        raise Exception(f'Redirect ({response.status}) with no Location header')
+                    current_url = requests.compat.urljoin(current_url, location)
+                    conn.close()
+                    continue
+                else:
+                    raise Exception(f'Failed with response code: {response.status}')
+            raise Exception(f'Too many redirects while fetching {url}')
         else:
             # Use requests for the request
             headers = self.req_session.headers.copy()
