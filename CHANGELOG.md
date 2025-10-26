@@ -1,5 +1,9 @@
 # Changelog
 
+## Version 2.14.9 [2025-09-19]
+- AnimePaheClient: Updated domain.
+- KissKhClient: Updated domain.
+
 ## Version 2.14.8 [2025-08-04]
 - Removed obsolete clients.
 - Added a configuration setting to allow displaying more search results. Specify `search_limit` in the client-specific configuration in your yaml file.
