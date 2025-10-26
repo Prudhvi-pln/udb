@@ -18,7 +18,7 @@ class AnimePaheClient(BaseClient):
     '''
     # step-0
     def __init__(self, config, session=None):
-        self.base_url = config.get('base_url', 'https://animepahe.ru/')
+        self.base_url = config.get('base_url', 'https://animepahe.si/')
         self.search_url = self.base_url + config.get('search_url', 'api?m=search&q=')
         self.episodes_list_url = self.base_url + config.get('episodes_list_url', 'api?m=release&sort=episode_asc&id=')
         self.download_link_url = self.base_url + config.get('download_link_url', 'api?m=links&p=kwik&id=')
