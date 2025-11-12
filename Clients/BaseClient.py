@@ -275,7 +275,7 @@ class BaseClient():
                 duration = sum([ float(match.group(1)) for match in re.finditer('#EXTINF:(.*),', data) ])
             else:
                 # add -show_streams in ffprobe to get more information
-                ffprobe_cmd = f'ffprobe -extension_picky 0 -allowed_extensions ALL -loglevel quiet -print_format json -show_format -select_streams v:0 -show_entries stream=width,height'
+                ffprobe_cmd = f'ffprobe -allowed_extensions ALL -loglevel quiet -print_format json -show_format -select_streams v:0 -show_entries stream=width,height'
                 if referer:
                     ffprobe_cmd += f' -referer "{referer}"'
                 self.logger.debug(f'Fetching video duration using ffprobe command: {ffprobe_cmd} "{link}"')
