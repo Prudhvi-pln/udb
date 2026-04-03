@@ -71,7 +71,7 @@ class KissKhClient(BaseClient):
 
         # evaluate js code to generate token
         self.logger.debug(f'Evaluating js code to generate token using {episode_id = } and {uid = }')
-        token = self.quickjs_context.eval(self.token_generation_js_code + f'_0x54b991({episode_id}, null, "2.8.10", "{uid}", 4830201,  "kisskh", "kisskh", "kisskh", "kisskh", "kisskh", "kisskh")')
+        token = self.quickjs_context.eval(self.token_generation_js_code + f';\n_0x54b991({episode_id}, null, "2.8.10", "{uid}", 4830201,  "kisskh", "kisskh", "kisskh", "kisskh", "kisskh", "kisskh")')
         return token
 
     # step-1
