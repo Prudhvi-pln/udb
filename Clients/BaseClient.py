@@ -2,8 +2,10 @@ __author__ = 'Prudhvi PLN'
 
 import json
 import logging
+import random
 import re
 import requests
+import time
 import os
 from bs4 import BeautifulSoup as BS
 from copy import deepcopy
@@ -98,6 +100,7 @@ class BaseClient():
         if return_type.lower() == 'json': header.update({'Accept': 'application/json'})
         if extra_headers: header.update(extra_headers)
         # self.logger.debug(f'Cookies before request: {self.req_session.cookies.get_dict()}')
+        time.sleep(random.uniform(1.5, 3.0))
         if request_type == 'get':
             response = self.req_session.get(url, timeout=self.request_timeout, headers=header, cookies=cookies)
         elif request_type == 'post':
@@ -121,6 +124,12 @@ class BaseClient():
         elif str(response.status_code).startswith('5'):     # retry if status code is 5xx
             msg = f'Failed with code: {response.status_code}'
             self.logger.warning(msg)
+            raise Exception(msg)
+
+        elif response.status_code == 429:                   # retry with longer delay on rate limit
+            msg = f'Failed with code: {response.status_code}'
+            self.logger.warning(msg)
+            time.sleep(random.uniform(5.0, 10.0))
             raise Exception(msg)
 
         elif response.status_code == 404:                   # raise exception if status code is 4xx
