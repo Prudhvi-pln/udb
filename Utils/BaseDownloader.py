@@ -11,6 +11,7 @@ from ssl import _create_unverified_context
 from tqdm.auto import tqdm
 
 from Utils.commons import colprint, exec_os_cmd, retry, PRINT_THEMES, DISPLAY_COLORS
+from Utils.progress import DownloadCancelled, ProgressReporter
 
 
 class BaseDownloader():
@@ -42,6 +43,12 @@ class BaseDownloader():
 
         # set http client usage based on config. As on Feb 21 2025, kisskh works with only http.client
         self.use_http_client = dl_config.get('use_http_client', False)
+
+        # GUI integration hooks (optional). When a progress_callback is provided,
+        # progress is reported to it instead of the terminal. When a cancel_event
+        # is provided, the download loop checks it between segments/chunks.
+        self.progress_callback = dl_config.get('progress_callback')
+        self.cancel_event = dl_config.get('cancel_event')
 
         self.req_session.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
@@ -213,13 +220,22 @@ class BaseDownloader():
             'bar_format': theme + '{l_bar}{bar}' + theme + '{r_bar}'
         })
 
+        # Use a progress callback (GUI mode) or tqdm (CLI mode).
+        if self.progress_callback:
+            progress_ctx = ProgressReporter(**metadata, callback=self.progress_callback)
+        else:
+            progress_ctx = tqdm(**metadata)
+
         # show progress of download using tqdm
-        with tqdm(**metadata) as progress:
+        with progress_ctx as progress:
             # parallelize download of segments/chunks using a threadpool
             with ThreadPoolExecutor(max_workers=self.concurrency, thread_name_prefix=self.thread_name_prefix) as executor:
                 results = [ executor.submit(download_func, ts_url) for ts_url in urls ]
 
                 for result in as_completed(results):
+                    # allow user cancellation between segments/chunks
+                    if self.cancel_event is not None and self.cancel_event.is_set():
+                        raise DownloadCancelled()
                     status, size = result.result()
                     if 'ERROR' in status:
                         self._colprint('error', status)
