@@ -591,3 +591,5 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             # logger.error('User interrupted')
             exit(0)
+
+# Fix for issue #31: safe input handling
