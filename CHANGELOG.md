@@ -1,6 +1,7 @@
 # Changelog
 
-## Version 2.16.2 [2026-08-16]
+## Version 2.16.3 [2026-08-22]
+- Fix #100: Update kisskh url.
 - Feature: Add controls to pause, resume, and cancel active downloads.
 - Feature: Option to disable automatic update checks via the CLI flag `--skip-update-check`.
 - Enhancement #95: Download episodes/movies with double-digit numbering.
