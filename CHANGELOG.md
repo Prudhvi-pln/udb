@@ -1,6 +1,7 @@
 # Changelog
 
-## Version 2.16.3 [2026-08-22]
+## Version 2.16.4 [2026-08-25]
+- Fix #102: Incorrect url expansion.
 - Fix #100: Update kisskh url.
 - Feature: Add controls to pause, resume, and cancel active downloads.
 - Feature: Option to disable automatic update checks via the CLI flag `--skip-update-check`.

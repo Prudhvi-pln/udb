@@ -48,6 +48,7 @@ class BaseClient():
         self._regex_extract = lambda rgx, txt, grp: re.search(rgx, txt).group(grp) if re.search(rgx, txt) else False
         self._normalize_url = lambda url, base_url: (
             url if url.startswith('http') else
+            f"https:{url}" if url.startswith('//') else
             f"{urlparse(base_url).scheme}://{urlparse(base_url).netloc}{url}" if url.startswith('/') else
             f"{base_url}/{url}"
         )
